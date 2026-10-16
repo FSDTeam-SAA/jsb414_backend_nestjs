@@ -1,0 +1,26 @@
+model User {
+    id          String   @id @default(uuid())
+    firstName   String
+    lastName    String
+    email       String   @unique
+    password    String
+    phoneNumber String?
+    photo       String?
+    role        UserRole @default(user)
+
+    otp            String?
+    otpExpiry      DateTime?
+    verifiedForget Boolean?
+
+    createdPlans   Subscribe[]     @relation("SubscribeCreatedBy")
+    updatedPlans   Subscribe[]     @relation("SubscribeUpdatedBy")
+    userSubscribes UserSubscribe[]
+    payments       Payment[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("users")
+}
+
+//$2b$10$LAi32D2VIJ61tArt4zbk/egBnah0z4s8OTH6UON4MxbliQaWQ691m

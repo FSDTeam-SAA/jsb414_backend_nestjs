@@ -1,0 +1,25 @@
+enum UserRole {
+    superadmin
+    admin
+    user
+}
+
+enum SubscriptionStatus {
+    ACTIVE
+    CANCELLED
+    EXPIRED
+    PAST_DUE
+}
+
+enum PaymentType {
+    SUBSCRIPTION
+    LEAD_PURCHASE
+    ACCOUNT_FUNDING
+}
+
+enum PaymentStatus {
+    PENDING
+    COMPLETED
+    FAILED
+    REFUNDED
+}

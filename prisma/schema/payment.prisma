@@ -1,0 +1,23 @@
+model Payment {
+  id          String        @id @default(uuid())
+  amount      Float
+  currency    String        @default("USD")
+  paymentType PaymentType   @default(SUBSCRIPTION)
+  status      PaymentStatus @default(PENDING)
+
+  stripePaymentIntentId String? @unique
+  stripeSessionId       String?
+  receiptUrl            String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  subscribeId String?
+  subscribe   Subscribe? @relation(fields: [subscribeId], references: [id], onDelete: SetNull)
+
+  orderId   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("payments")
+}

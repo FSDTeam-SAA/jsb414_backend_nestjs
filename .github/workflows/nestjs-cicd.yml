@@ -1,0 +1,97 @@
+name: Check and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      # Generation and mocked tests do not connect to a database.
+      DATABASE_URL: postgresql://test:test@localhost:5432/test_only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run generate
+      - run: npm run check
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: check
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build application image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: production
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/nestjs-app:${{ github.sha }}
+      - name: Build migration image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: migration
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/nestjs-app-migration:${{ github.sha }}
+      - name: Prepare deployment files
+        run: |
+          echo "COMPOSE_BASE64=$(base64 -w0 docker-compose.yml)" >> "$GITHUB_ENV"
+          echo "BACKUP_SCRIPT_BASE64=$(base64 -w0 scripts/backup.sh)" >> "$GITHUB_ENV"
+      - name: Back up, migrate and deploy
+        uses: appleboy/ssh-action@v1
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: IMAGE_TAG,DOCKER_USERNAME,COMPOSE_BASE64,BACKUP_SCRIPT_BASE64
+          command_timeout: 15m
+          script: |
+            set -eu
+            umask 077
+            mkdir -p /app
+            cd /app
+            # Provision these secret files once on the server; never commit them.
+            test -s .env || { echo "Missing /app/.env"; exit 1; }
+            test -s backup.env || { echo "Missing /app/backup.env"; exit 1; }
+            printf '%s' "$COMPOSE_BASE64" | base64 -d > docker-compose.yml
+            printf '%s' "$BACKUP_SCRIPT_BASE64" | base64 -d > backup.sh
+            export IMAGE_TAG DOCKER_USERNAME
+            docker compose pull app migrate
+            # backup.env is a trusted, shell-compatible file owned by the deploy user.
+            (set -a; . ./backup.env; set +a; bash ./backup.sh)
+            docker compose run --rm --no-deps migrate
+            previous_tag="$(cat .release 2>/dev/null || true)"
+            if ! docker compose up -d --no-build --wait --wait-timeout 120 app; then
+              echo "New release failed health checks"
+              if [ -n "$previous_tag" ]; then
+                export IMAGE_TAG="$previous_tag"
+                docker compose up -d --no-build --wait --wait-timeout 120 app || true
+              fi
+              exit 1
+            fi
+            printf '%s\n' "$IMAGE_TAG" > .release

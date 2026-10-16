@@ -1,0 +1,25 @@
+model Subscribe {
+  id       String  @id @default(uuid())
+  title    String
+  subTitle String
+  price    Int
+  discount Int     @default(0)
+  currency String  @default("USD")
+  isActive Boolean @default(true)
+
+  createdById String
+  createdBy   User   @relation("SubscribeCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  updatedById String?
+  updatedBy   User?   @relation("SubscribeUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  userSubscribes UserSubscribe[]
+  payments       Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdById])
+  @@index([updatedById])
+  @@map("subscribes")
+}

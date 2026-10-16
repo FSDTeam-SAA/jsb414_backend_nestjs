@@ -1,0 +1,5 @@
+// model Lead{
+//   id String @default(uuid())
+
+// }
+

@@ -27,6 +27,11 @@ async function bootstrap() {
       'api/docs',
       app,
       SwaggerModule.createDocument(app, swaggerConfig),
+      {
+        swaggerOptions: {
+          persistAuthorization: true,
+        },
+      },
     );
   }
   await app.listen(config.port, '0.0.0.0');

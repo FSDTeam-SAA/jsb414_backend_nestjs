@@ -9,6 +9,8 @@ import { HealthController } from './app/module/health/health.controller';
 import { SubscriptionModule } from './app/module/subscription/subscription.module';
 import { UserModule } from './app/module/user/user.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { LeadModule } from './app/module/lead/lead.module';
+import { AgePriceModule } from './app/module/age-price/age-price.module';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { PrismaModule } from './prisma/prisma.module';
     AuthModule,
     SubscriptionModule,
     CategoriesModule,
+    LeadModule,
+    AgePriceModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

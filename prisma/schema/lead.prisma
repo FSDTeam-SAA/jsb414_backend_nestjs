@@ -1,5 +1,41 @@
-// model Lead{
-//   id String @default(uuid())
+model Lead {
+  id                      String           @id @default(uuid())
+  leadNumber              Int              @unique @default(autoincrement())
+  categoryId              String
+  category                Catagorie        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  firstName               String?
+  lastName                String?
+  propertyAddress         String?
+  unitNumber              String?
+  city                    String?
+  county                  String?
+  state                   String?
+  zipcode                 String?
+  propertyType            String?
+  propertyImage           String?
+  estValue                Int?
+  estEquity               Int?
+  mortgageBalance         Int?
+  saleDate                DateTime?
+  stage                   String?
+  mortgageInformation     String?
+  phoneNumbers            String[]         @default([])
+  emailAddresses          String[]         @default([])
+  source                  String
+  availability            LeadAvailability @default(SHARED)
+  status                  String           @default("ACTIVE")
+  classification          String           @default("NEEDS_ENRICHMENT")
+  sharedLimit             Int?
+  sharedSalesCount        Int              @default(0)
+  exclusiveSoldAt         DateTime?
+  lastImportedAt          DateTime?
+  sharedBasePriceCents    Int?
+  exclusiveBasePriceCents Int?
+  adminId                 String
+  admin                   User             @relation(fields: [adminId], references: [id])
 
-// }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  @@map("leads")
+}

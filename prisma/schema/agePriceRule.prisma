@@ -1,0 +1,18 @@
+model AgePriceRule {
+  id String @id @default(uuid())
+
+  categoryId String
+  category   Catagorie @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  priceType PriceType
+
+  minDays Int
+  maxDays Int?
+
+  priceCents Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("age_price_rules")
+}

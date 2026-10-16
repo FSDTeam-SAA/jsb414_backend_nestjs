@@ -23,3 +23,34 @@ enum PaymentStatus {
     FAILED
     REFUNDED
 }
+
+enum LeadStatus {
+    ACTIVE
+    INACTIVE
+    ARCHIVED
+}
+
+enum LeadClassification {
+    SELLABLE
+    NEEDS_ENRICHMENT
+    NEEDS_REVIEW
+    REJECTED
+}
+
+enum LeadAvailability {
+    SHARED    @map("Shared")
+    EXCLUSIVE @map("Exclusive")
+    BOTH      @map("Both")
+}
+
+enum LeadReviewStatus {
+    PENDING
+    MERGED
+    CREATED_NEW
+    REJECTED
+}
+
+enum PriceType {
+    SHARED
+    EXCLUSIVE
+}

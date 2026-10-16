@@ -16,6 +16,7 @@ model User {
     updatedPlans   Subscribe[]     @relation("SubscribeUpdatedBy")
     userSubscribes UserSubscribe[]
     payments       Payment[]
+    lead           Lead[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

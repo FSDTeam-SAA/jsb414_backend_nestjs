@@ -108,6 +108,7 @@
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
     "moduleNameMapper": {
+      "^src/(.*)$": "<rootDir>/$1",
       "^(\\.{1,2}/.*)\\.js$": "$1"
     },
     "setupFiles": [
@@ -120,6 +121,6 @@
     "@prisma/engines@7.10.0": true
   },
   "engines": {
-    "node": "26.7.x"
+    "node": ">=24.0.0"
   }
 }

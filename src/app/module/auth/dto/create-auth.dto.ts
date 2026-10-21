@@ -44,7 +44,7 @@ export class VerifyEmailOtp extends ForgotPasswordDto {
 export class ResetPasswordDto extends ForgotPasswordDto {
   @ApiProperty({ example: 'A-new-strong-password123' })
   @IsString()
-  @MinLength(8)
+  @MinLength(6)
   @MaxLength(72)
   newPassword!: string;
 
@@ -64,7 +64,7 @@ export class ChangePassword {
 
   @ApiProperty()
   @IsString()
-  @MinLength(8)
+  @MinLength(6)
   @MaxLength(72)
   newPassword!: string;
 }

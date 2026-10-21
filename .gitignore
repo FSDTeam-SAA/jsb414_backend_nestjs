@@ -12,7 +12,6 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 # vscode
-.vscode/
 
 # OS
 .DS_Store
@@ -37,11 +36,9 @@ lerna-debug.log*
 !.vscode/extensions.json
 
 # dotenv environment variable files
-.env
 .env.development.local
 .env.test.local
 .env.production.local
-.env.*
 !.env.example
 *.dump
 /backups/
@@ -57,3 +54,4 @@ pids
 *.pid
 *.seed
 *.pid.lock
+config.bat

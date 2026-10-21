@@ -10,7 +10,7 @@ export class SubscriptionCron {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  @Cron(config.everyDay!)
+  @Cron(config.everyDay || '0 0 * * *')
   async checkExpiredSubscriptions() {
     const now = new Date();
     this.logger.log(

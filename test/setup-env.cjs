@@ -6,3 +6,4 @@ process.env.REFRESH_TOKEN_SECRET = 'test-refresh-secret-at-least-32-characters';
 process.env.ACCESS_TOKEN_EXPIRES = '15m';
 process.env.REFRESH_TOKEN_EXPIRES = '7d';
 process.env.FRONTEND_URL = 'http://localhost:3000';
+process.env.EVERY_DAY_AT_MIDNIGHT = '0 0 * * *';

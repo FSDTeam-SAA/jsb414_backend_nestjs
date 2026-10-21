@@ -4,7 +4,7 @@ import { UpdateAgePriceDto } from './dto/update-age-price.dto';
 
 @Injectable()
 export class AgePriceService {
-  create(createAgePriceDto: CreateAgePriceDto) {
+  create(_createAgePriceDto: CreateAgePriceDto) {
     return 'This action adds a new agePrice';
   }
 
@@ -16,7 +16,7 @@ export class AgePriceService {
     return `This action returns a #${id} agePrice`;
   }
 
-  update(id: number, updateAgePriceDto: UpdateAgePriceDto) {
+  update(id: number, _updateAgePriceDto: UpdateAgePriceDto) {
     return `This action updates a #${id} agePrice`;
   }
 

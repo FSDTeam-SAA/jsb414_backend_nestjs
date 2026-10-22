@@ -294,4 +294,236 @@ export class LeadService {
 
     return deleted;
   }
+
+  async bulkUploadLeads(
+    file: Express.Multer.File,
+    adminId: string,
+    defaultCategoryId?: string,
+  ) {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('A CSV or Excel file is required');
+    }
+
+    const rows = this.parseSpreadsheetFile(file);
+    if (!rows || rows.length === 0) {
+      throw new BadRequestException('The uploaded file contains no data rows');
+    }
+
+    // Cache categories so we can resolve by ID or Name
+    const allCategories = await this.prisma.catagorie.findMany({
+      select: { id: true, name: true },
+    });
+    const categoryMapByName = new Map<string, string>();
+    const categoryIdSet = new Set<string>();
+    for (const cat of allCategories) {
+      categoryIdSet.add(cat.id);
+      categoryMapByName.set(cat.name.trim().toLowerCase(), cat.id);
+    }
+
+    const leadsToCreate: any[] = [];
+    const errors: Array<{ row: number; error: string }> = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNum = i + 2; // spreadsheet 1-indexed header is row 1
+
+      // 1. Resolve category
+      let categoryId =
+        this.getFieldValue(row, ['categoryid', 'category_id', 'category']) ||
+        defaultCategoryId;
+
+      if (categoryId && !categoryIdSet.has(categoryId)) {
+        // Try matching by category name
+        const matched = categoryMapByName.get(categoryId.trim().toLowerCase());
+        if (matched) {
+          categoryId = matched;
+        }
+      }
+
+      if (!categoryId || !categoryIdSet.has(categoryId)) {
+        errors.push({
+          row: rowNum,
+          error: `Invalid or missing category '${categoryId || 'N/A'}'. Provide a valid category ID/name or pass defaultCategoryId.`,
+        });
+        continue;
+      }
+
+      // 2. Parse sale date
+      const rawSaleDate = this.getFieldValue(row, [
+        'saledate',
+        'sale_date',
+        'auctiondate',
+        'auction_date',
+        'date',
+      ]);
+      let saleDate: Date | undefined;
+      if (rawSaleDate) {
+        const d = new Date(rawSaleDate);
+        if (!isNaN(d.getTime())) {
+          saleDate = d;
+        }
+      }
+
+      // 3. String & Numeric fields
+      const stage = this.getFieldValue(row, ['stage', 'foreclosurestage', 'foreclosure_stage']);
+      const mortgageInformation = this.getFieldValue(row, [
+        'mortgageinformation',
+        'mortgage_information',
+        'mortgage',
+      ]);
+      const source =
+        this.getFieldValue(row, ['source']) || file.originalname || 'Spreadsheet Import';
+      const rawAvailability = (
+        this.getFieldValue(row, ['availability']) || 'SHARED'
+      ).toUpperCase();
+      const availability = ['SHARED', 'EXCLUSIVE', 'BOTH'].includes(rawAvailability)
+        ? (rawAvailability as any)
+        : 'SHARED';
+
+      const sharedLimit = this.parseNumber(
+        this.getFieldValue(row, ['sharedlimit', 'shared_limit']),
+      );
+      const customPrice = this.parseNumber(
+        this.getFieldValue(row, ['customprice', 'custom_price', 'price', 'baseprice']),
+      );
+      const status =
+        this.getFieldValue(row, ['status']) || 'ACTIVE';
+      const propertyType = this.getFieldValue(row, ['propertytype', 'property_type', 'type']);
+      const propertyAddress = this.getFieldValue(row, [
+        'propertyaddress',
+        'property_address',
+        'address',
+        'street',
+      ]);
+      const city = this.getFieldValue(row, ['city']);
+      const state = this.getFieldValue(row, ['state']);
+      const zipcode = this.getFieldValue(row, ['zipcode', 'zip', 'postalcode']);
+      const estValue = this.parseNumber(
+        this.getFieldValue(row, ['estvalue', 'est_value', 'value', 'estimatedvalue']),
+      );
+      const estEquity = this.parseNumber(
+        this.getFieldValue(row, ['estequity', 'est_equity', 'equity', 'estimatedequity']),
+      );
+      const firstName = this.getFieldValue(row, ['firstname', 'first_name']);
+      const lastName = this.getFieldValue(row, ['lastname', 'last_name']);
+      const propertyImage = this.getFieldValue(row, ['propertyimage', 'property_image', 'image', 'imageurl']);
+
+      // 4. Arrays: phone numbers and emails
+      const rawPhones = this.getFieldValue(row, ['phonenumbers', 'phone_numbers', 'phones', 'phone', 'phonenumber']);
+      const phoneNumbers = this.parseStringArray(rawPhones);
+
+      const rawEmails = this.getFieldValue(row, ['emailaddresses', 'email_addresses', 'emails', 'email', 'emailaddress']);
+      const emailAddresses = this.parseStringArray(rawEmails);
+
+      leadsToCreate.push({
+        categoryId,
+        adminId,
+        saleDate,
+        stage,
+        mortgageInformation,
+        source,
+        availability,
+        sharedLimit: sharedLimit ? Math.round(sharedLimit) : undefined,
+        sharedBasePriceCents: customPrice ? Math.round(customPrice) : undefined,
+        status,
+        propertyImage,
+        propertyType,
+        propertyAddress,
+        city,
+        state,
+        zipcode,
+        estValue: estValue ? Math.round(estValue) : undefined,
+        estEquity: estEquity ? Math.round(estEquity) : undefined,
+        firstName,
+        lastName,
+        phoneNumbers,
+        emailAddresses,
+      });
+    }
+
+    if (leadsToCreate.length === 0) {
+      throw new BadRequestException({
+        message: 'No valid leads could be imported from the file',
+        errors,
+      });
+    }
+
+    // Insert leads
+    const createdCount = await this.prisma.lead.createMany({
+      data: leadsToCreate,
+    });
+
+    return {
+      totalRows: rows.length,
+      importedCount: createdCount.count,
+      failedCount: errors.length,
+      errors: errors.slice(0, 50), // Show up to first 50 errors
+    };
+  }
+
+  private parseSpreadsheetFile(file: Express.Multer.File): Record<string, any>[] {
+    const isCsv =
+      file.mimetype === 'text/csv' ||
+      file.originalname.toLowerCase().endsWith('.csv');
+
+    // XLSX library supports CSV, XLSX, XLS directly from buffer
+    const xlsx = require('xlsx');
+    const workbook = xlsx.read(file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    if (!sheetName) return [];
+
+    const worksheet = workbook.Sheets[sheetName];
+    const rawRows = xlsx.utils.sheet_to_json(worksheet, { defval: '' }) as Record<
+      string,
+      any
+    >[];
+
+    // Normalize keys to lowercase stripped of spaces/underscores for flexible matching
+    return rawRows.map((row) => {
+      const normalizedRow: Record<string, any> = {};
+      for (const [key, val] of Object.entries(row)) {
+        const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+        normalizedRow[cleanKey] = val;
+      }
+      return normalizedRow;
+    });
+  }
+
+  private getFieldValue(row: Record<string, any>, possibleKeys: string[]): string | undefined {
+    for (const key of possibleKeys) {
+      const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (row[cleanKey] !== undefined && row[cleanKey] !== null && String(row[cleanKey]).trim() !== '') {
+        return String(row[cleanKey]).trim();
+      }
+    }
+    return undefined;
+  }
+
+  private parseNumber(val?: string | number): number | undefined {
+    if (val === undefined || val === null || val === '') return undefined;
+    if (typeof val === 'number') return isNaN(val) ? undefined : val;
+    const cleanStr = String(val).replace(/[\$,]/g, '').trim();
+    const num = Number(cleanStr);
+    return isNaN(num) ? undefined : num;
+  }
+
+  private parseStringArray(val?: any): string[] {
+    if (!val) return [];
+    if (Array.isArray(val)) return val.map((s) => String(s).trim()).filter(Boolean);
+    const str = String(val).trim();
+    if (!str) return [];
+    if (str.startsWith('[') && str.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(str);
+        if (Array.isArray(parsed)) return parsed.map((s) => String(s).trim()).filter(Boolean);
+      } catch {
+        // Fall back to splitting
+      }
+    }
+    return str
+      .split(/[,;\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
 }
+

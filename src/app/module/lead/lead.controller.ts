@@ -25,6 +25,7 @@ import type { Request } from 'express';
 import { fileUpload } from 'src/app/helper/fileUploder';
 import pick from 'src/app/helper/pick';
 import { AuthGuard } from 'src/app/middlewares/auth.guard';
+import { BulkUploadLeadDto } from './dto/bulk-upload-lead.dto';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 import { LeadService } from './lead.service';
@@ -57,6 +58,35 @@ export class LeadController {
 
     return {
       message: 'Lead created successfully',
+      data: result,
+    };
+  }
+
+  @Post('bulk-upload')
+  @ApiOperation({
+    summary: 'Bulk upload leads from CSV or Excel (.xlsx, .xls) file',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBearerAuth('access-token')
+  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseInterceptors(
+    FileInterceptor('file', fileUpload.documentUploadConfig),
+  )
+  @HttpCode(HttpStatus.CREATED)
+  async bulkUploadLeads(
+    @Req() req: Request,
+    @Body() bulkUploadLeadDto: BulkUploadLeadDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const adminId = req.user!.id;
+    const result = await this.leadService.bulkUploadLeads(
+      file,
+      adminId,
+      bulkUploadLeadDto.defaultCategoryId,
+    );
+
+    return {
+      message: `Bulk import completed: ${result.importedCount} lead(s) imported`,
       data: result,
     };
   }

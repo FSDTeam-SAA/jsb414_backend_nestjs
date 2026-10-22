@@ -1110,6 +1110,37 @@
           "response": []
         },
         {
+          "name": "Bulk Upload Leads (CSV or Excel)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "description": "Upload a .csv, .xlsx, or .xls file containing leads",
+                  "src": []
+                },
+                {
+                  "key": "defaultCategoryId",
+                  "value": "{{categoryId}}",
+                  "type": "text",
+                  "description": "Fallback Category ID if not specified inside the file per row"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/lead/bulk-upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "lead", "bulk-upload"]
+            },
+            "description": "Uploads and imports multiple leads from a CSV or Excel file (.csv, .xlsx, .xls) directly into the database."
+          },
+          "response": []
+        },
+        {
           "name": "Get All Leads",
           "request": {
             "method": "GET",

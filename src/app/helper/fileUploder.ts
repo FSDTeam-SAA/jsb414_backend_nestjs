@@ -30,6 +30,35 @@ const uploadConfig: MulterOptions = {
   },
 };
 
+const documentUploadConfig: MulterOptions = {
+  storage: memoryStorage(),
+  limits: {
+    fileSize: 25 * 1024 * 1024, // 25 MB
+    files: 1,
+    fields: 10,
+    fieldSize: 64 * 1024,
+  },
+  fileFilter: (_req, file, callback) => {
+    const allowedMimes = [
+      'text/csv',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/plain',
+    ];
+    const isCsvOrExcelExt = /\.(csv|xlsx|xls)$/i.test(file.originalname);
+    if (!allowedMimes.includes(file.mimetype) && !isCsvOrExcelExt) {
+      return callback(
+        new HttpException(
+          'Only CSV or Excel (.csv, .xlsx, .xls) files are allowed',
+          400,
+        ),
+        false,
+      );
+    }
+    callback(null, true);
+  },
+};
+
 const uploadToCloudinary = async (
   file: Express.Multer.File,
 ): Promise<{ url: string; public_id: string }> => {
@@ -75,4 +104,5 @@ export const fileUpload = {
   uploadToCloudinary,
   deleteFromCloudinary,
   uploadConfig,
+  documentUploadConfig,
 };

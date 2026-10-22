@@ -1,16 +1,37 @@
 // src/app/module/lead/dto/create-lead.dto.ts
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayNotEmpty,
   IsArray,
   IsDateString,
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   Min,
 } from 'class-validator';
+import { LeadAvailability, LeadStatus } from '../../../../../prisma/generated/prisma/enums';
+
+// Helper to handle form-data or JSON parsing for string arrays
+function transformStringArray({ value }: { value: any }): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(String);
+    } catch {
+      // If comma-separated
+      if (value.includes(',')) {
+        return value.split(',').map((s) => s.trim());
+      }
+    }
+    return [value.trim()];
+  }
+  return [];
+}
 
 export class CreateLeadDto {
   @ApiProperty({
@@ -23,98 +44,131 @@ export class CreateLeadDto {
 
   @ApiProperty({
     example: '2026-11-20T10:00:00.000Z',
-    description: 'Lead or Auction Sale Date',
+    description: 'Lead or Auction Sale Date (ISO Date string)',
   })
   @IsDateString({}, { message: 'saleDate must be a valid ISO date string' })
   @IsNotEmpty({ message: 'saleDate is required' })
   saleDate!: string;
 
-  @ApiProperty({
-    example: 'Notice of Default',
-    description: 'Stage of the lead/foreclosure',
+  @ApiPropertyOptional({
+    example: 'Foreclosure stage',
+    description: 'Stage of the foreclosure (e.g. Notice of Default, Auction)',
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'stage is required' })
-  stage!: string;
+  stage?: string;
 
-  @ApiProperty({
-    example: '$450,000 balance with Wells Fargo',
-    description: 'Mortgage and lender details',
+  @ApiPropertyOptional({
+    example: 'Conventional',
+    description: 'Mortgage information (e.g. Conventional, FHA, balance details)',
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'mortgageInformation is required' })
-  mortgageInformation!: string;
+  mortgageInformation?: string;
 
-  @ApiProperty({
-    example: 'CSV Provider',
-    description: 'Source of the lead (CSV Provider, API, Meta Ads, etc.)',
+  @ApiPropertyOptional({
+    example: 'Internal',
+    description: 'Source of the lead (e.g. Internal, CSV Provider, API)',
+    default: 'Internal',
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'source is required' })
-  source!: string;
+  source?: string;
 
-  @ApiProperty({
-    example: 'Shared',
-    enum: ['Shared', 'Exclusive'],
-    description: 'Availability model (Shared or Exclusive)',
+  @ApiPropertyOptional({
+    enum: LeadAvailability,
+    example: LeadAvailability.SHARED,
+    description: 'Availability model (SHARED, EXCLUSIVE, BOTH)',
+    default: LeadAvailability.SHARED,
   })
+  @IsOptional()
+  @IsEnum(LeadAvailability, {
+    message: 'availability must be SHARED, EXCLUSIVE, or BOTH',
+  })
+  availability?: LeadAvailability;
+
+  @ApiPropertyOptional({
+    example: 10,
+    description: 'Maximum number of times this lead can be shared',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'sharedLimit must be an integer' })
+  @Min(1)
+  sharedLimit?: number;
+
+  @ApiPropertyOptional({
+    example: 1000,
+    description: 'Custom price in cents or amount (e.g., $10 = 1000 cents)',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'customPrice must be an integer' })
+  @Min(0)
+  customPrice?: number;
+
+  @ApiPropertyOptional({
+    enum: LeadStatus,
+    example: LeadStatus.ACTIVE,
+    description: 'Status of the lead (ACTIVE, INACTIVE, ARCHIVED)',
+    default: LeadStatus.ACTIVE,
+  })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'availablility is required' })
-  availablility!: string;
+  status?: string;
 
   @ApiPropertyOptional({
     type: 'string',
     format: 'binary',
-    description: 'Optional property image URL',
+    description: 'Property image file (uploaded to Cloudinary)',
   })
   @IsOptional()
   @IsString()
   propertyImage?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 'Single Family',
-    description:
-      'Property type (Single Family, Multi Family, Commercial, etc.)',
+    description: 'Property type (Single Family, Multi Family, Commercial, etc.)',
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'propertyType is required' })
-  propertyType!: string;
+  propertyType?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: '123 Main Street',
     description: 'Property street address',
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'propertyAddress is required' })
-  propertyAddress!: string;
+  propertyAddress?: string;
 
-  @ApiProperty({ example: 'Anaheim', description: 'City name' })
+  @ApiPropertyOptional({ example: 'Anaheim', description: 'City name' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'city is required' })
-  city!: string;
+  city?: string;
 
-  @ApiProperty({ example: 'CA', description: 'State code or name' })
+  @ApiPropertyOptional({ example: 'CA', description: 'State code or name' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'state is required' })
-  state!: string;
+  state?: string;
 
-  @ApiProperty({ example: '92801', description: 'ZIP code' })
+  @ApiPropertyOptional({ example: '92801', description: 'ZIP code' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'zipcode is required' })
-  zipcode!: string;
+  zipcode?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 685000,
     description: 'Estimated property value',
   })
+  @IsOptional()
   @Type(() => Number)
   @IsInt({ message: 'estValue must be an integer' })
   @Min(0)
-  @IsNotEmpty({ message: 'estValue is required' })
-  estValue!: number;
+  estValue?: number;
 
   @ApiPropertyOptional({
-    example: 240000,
+    example: 85000,
     description: 'Estimated equity amount',
   })
   @IsOptional()
@@ -123,33 +177,35 @@ export class CreateLeadDto {
   @Min(0)
   estEquity?: number;
 
-  @ApiProperty({ example: 'John', description: 'Property owner first name' })
+  @ApiPropertyOptional({ example: 'Michael', description: 'Property owner first name' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'firstName is required' })
-  firstName!: string;
+  firstName?: string;
 
-  @ApiProperty({ example: 'Smith', description: 'Property owner last name' })
+  @ApiPropertyOptional({ example: 'Anderson', description: 'Property owner last name' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'lastName is required' })
-  lastName!: string;
+  lastName?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     type: [String],
-    example: ['+1 (714) 555-0199', '+1 (714) 555-0123'],
+    example: ['+0123 456 8910'],
     description: 'List of owner phone numbers',
   })
-  @IsArray({ message: 'PhoneNumber must be an array' })
-  @ArrayNotEmpty({ message: 'PhoneNumber array cannot be empty' })
+  @IsOptional()
+  @Transform(transformStringArray)
+  @IsArray({ message: 'phoneNumbers must be an array' })
   @IsString({ each: true, message: 'Each phone number must be a string' })
-  PhoneNumber!: string[];
+  phoneNumbers?: string[];
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     type: [String],
-    example: ['john.smith@gmail.com', 'jsmith@work.com'],
+    example: ['michael.anderson@example.com'],
     description: 'List of owner email addresses',
   })
-  @IsArray({ message: 'emailAddress must be an array' })
-  @ArrayNotEmpty({ message: 'emailAddress array cannot be empty' })
+  @IsOptional()
+  @Transform(transformStringArray)
+  @IsArray({ message: 'emailAddresses must be an array' })
   @IsString({ each: true, message: 'Each email address must be a string' })
-  emailAddress!: string[];
+  emailAddresses?: string[];
 }

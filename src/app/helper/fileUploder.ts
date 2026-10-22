@@ -16,7 +16,7 @@ const uploadConfig: MulterOptions = {
   limits: {
     fileSize: 10 * 1024 * 1024, // 10 MB
     files: 1,
-    fields: 10,
+    fields: 50,
     fieldSize: 64 * 1024,
   },
   fileFilter: (_req, file, callback) => {

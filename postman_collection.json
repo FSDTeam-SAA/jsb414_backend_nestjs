@@ -1,0 +1,1225 @@
+{
+  "info": {
+    "_postman_id": "7f8b9c1d-4e5a-4b6c-8d9e-1f2a3b4c5d6e",
+    "name": "Foreclosure Gold API",
+    "description": "Comprehensive Postman collection for Foreclosure Gold NestJS API, including Authentication, User Management, Subscription Plans, Categories, Age-Based Pricing, and Health Checks.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "resetToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "subscriptionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "categoryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "agePriceId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "leadId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health & System",
+      "item": [
+        {
+          "name": "Root Hello (HTML)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            },
+            "description": "Returns welcome page HTML."
+          },
+          "response": []
+        },
+        {
+          "name": "Liveness Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/health/live",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "health", "live"]
+            },
+            "description": "Kubernetes/Docker liveness probe returning { status: 'ok' }."
+          },
+          "response": []
+        },
+        {
+          "name": "Readiness Check (DB)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/health/ready",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "health", "ready"]
+            },
+            "description": "Kubernetes/Docker readiness probe testing database connectivity."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"email\": \"user@example.com\",\n  \"phoneNumber\": \"+12025550143\",\n  \"password\": \"A-strong-password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth"]
+            },
+            "description": "Registers a new user account."
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res && res.data && res.data.accessToken) {",
+                  "    pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "    console.log('accessToken updated successfully');",
+                  "}",
+                  "if (res && res.data && res.data.user && res.data.user.id) {",
+                  "    pm.collectionVariables.set('userId', res.data.user.id);",
+                  "    console.log('userId updated to: ' + res.data.user.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"A-strong-password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Authenticates user and returns JWT accessToken, and sets httpOnly refreshToken cookie. Also automatically stores accessToken in collection variables."
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Access Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res && res.data && res.data.accessToken) {",
+                  "    pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "    console.log('accessToken refreshed successfully');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "refresh-token"]
+            },
+            "description": "Refreshes an expired access token using the httpOnly cookie or the request body token."
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "forgot-password"]
+            },
+            "description": "Sends a 6-digit OTP code to the specified email address."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Email OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res && res.data && res.data.resetToken) {",
+                  "    pm.collectionVariables.set('resetToken', res.data.resetToken);",
+                  "    console.log('resetToken saved successfully');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/verify-email-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "verify-email-otp"]
+            },
+            "description": "Verifies 6-digit email OTP and exchanges it for a 5-minute single-use password resetToken."
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"resetToken\": \"{{resetToken}}\",\n  \"newPassword\": \"A-new-strong-password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "reset-password"]
+            },
+            "description": "Resets user password using verified resetToken."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            },
+            "description": "Clears the refresh token cookie."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Create User",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Saurav\",\n  \"lastName\": \"Sarkar\",\n  \"email\": \"user@example.com\",\n  \"phoneNumber\": \"+8801700000000\",\n  \"password\": \"A-strong-password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user"]
+            },
+            "description": "Direct user creation endpoint with rate limiting."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user", "profile"]
+            },
+            "description": "Retrieves the currently authenticated user's profile."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile (JSON or Multipart)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"John Updated\",\n  \"lastName\": \"Doe Updated\",\n  \"phoneNumber\": \"+12025550199\",\n  \"photo\": \"https://images.example.com/avatar.jpg\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user", "profile"]
+            },
+            "description": "Updates current user profile. Also supports multipart/form-data with a file under key 'photo'."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Users (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user?page=1&limit=10&searchTerm=&role=user&sortBy=createdAt&sortOrder=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "searchTerm",
+                  "value": ""
+                },
+                {
+                  "key": "role",
+                  "value": "user",
+                  "description": "user, admin, or superadmin"
+                },
+                {
+                  "key": "email",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "firstName",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "lastName",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc"
+                }
+              ]
+            },
+            "description": "Paginated and filtered list of users (Admin and Superadmin only)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Single User by ID (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user", "{{userId}}"]
+            },
+            "description": "Fetches user details by UUID (Admin and Superadmin only)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User by ID (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"UpdatedFirst\",\n  \"lastName\": \"UpdatedLast\",\n  \"phoneNumber\": \"+12025550188\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/user/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "user", "{{userId}}"]
+            },
+            "description": "Updates a specific user by UUID (Admin and Superadmin only)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Subscription Plans",
+      "item": [
+        {
+          "name": "Get Public Active Plans",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/subscription/active",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "subscription", "active"]
+            },
+            "description": "Public endpoint returning active subscription plans without internal admin metadata."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Subscription Plans (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/subscription?page=1&limit=10&searchTerm=&title=&currency=USD&isActive=true&sortBy=price&sortOrder=asc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "subscription"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "searchTerm",
+                  "value": ""
+                },
+                {
+                  "key": "title",
+                  "value": ""
+                },
+                {
+                  "key": "subTitle",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "currency",
+                  "value": "USD"
+                },
+                {
+                  "key": "isActive",
+                  "value": "true"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "price"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "asc"
+                }
+              ]
+            },
+            "description": "Lists all subscription plans with pagination and filters (Admin and Superadmin only)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Subscription Plan (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res && res.data && res.data.id) {",
+                  "    pm.collectionVariables.set('subscriptionId', res.data.id);",
+                  "    console.log('subscriptionId set to: ' + res.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Silver\",\n  \"subTitle\": \"Save 5% on every lead\",\n  \"price\": 4900,\n  \"discount\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/subscription",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "subscription"]
+            },
+            "description": "Creates a new subscription plan (Admin and Superadmin only). Price is in cents (4900 = $49.00)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Subscription Plan by ID (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/subscription/{{subscriptionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "subscription", "{{subscriptionId}}"]
+            },
+            "description": "Gets details of a single subscription plan by UUID."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Subscription Plan (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Gold\",\n  \"subTitle\": \"Save 10% on every lead\",\n  \"price\": 9900,\n  \"discount\": 10,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/subscription/{{subscriptionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "subscription", "{{subscriptionId}}"]
+            },
+            "description": "Updates or activates/deactivates a subscription plan by UUID."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Subscription Plan (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/subscription/{{subscriptionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "subscription", "{{subscriptionId}}"]
+            },
+            "description": "Soft deletes or deletes a subscription plan by UUID."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "Get All Categories",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categories?page=1&limit=10&searchTerm=&sortBy=createdAt&sortOrder=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categories"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "searchTerm",
+                  "value": ""
+                },
+                {
+                  "key": "name",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc"
+                }
+              ]
+            },
+            "description": "Lists categories with search, sorting, and pagination."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Category by ID",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categories/{{categoryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categories", "{{categoryId}}"]
+            },
+            "description": "Gets single category details by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Category (Admin - Multipart)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res && res.data && res.data.id) {",
+                  "    pm.collectionVariables.set('categoryId', res.data.id);",
+                  "    console.log('categoryId set to: ' + res.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Pre-Foreclosure",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Foreclosure stage leads with active notices of default",
+                  "type": "text"
+                },
+                {
+                  "key": "isActive",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "agePricingEnabled",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "sharedBasePriceCents",
+                  "value": "1500",
+                  "type": "text",
+                  "description": "Price in cents: 1500 = $15.00"
+                },
+                {
+                  "key": "exclusiveBasePriceCents",
+                  "value": "4500",
+                  "type": "text",
+                  "description": "Price in cents: 4500 = $45.00"
+                },
+                {
+                  "key": "logo",
+                  "type": "file",
+                  "src": "",
+                  "description": "Optional category logo image file"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categories/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categories", "create"]
+            },
+            "description": "Creates a new lead category with pricing and optional logo file (Admin only)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Category (Admin - Multipart)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Pre-Foreclosure Updated",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Updated description",
+                  "type": "text"
+                },
+                {
+                  "key": "isActive",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "agePricingEnabled",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "sharedBasePriceCents",
+                  "value": "1800",
+                  "type": "text"
+                },
+                {
+                  "key": "exclusiveBasePriceCents",
+                  "value": "5000",
+                  "type": "text"
+                },
+                {
+                  "key": "logo",
+                  "type": "file",
+                  "src": "",
+                  "description": "Optional updated logo image"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categories/{{categoryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categories", "{{categoryId}}"]
+            },
+            "description": "Updates category fields and/or logo image (Admin only)."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Category (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/categories/{{categoryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "categories", "{{categoryId}}"]
+            },
+            "description": "Deletes a category by ID (Admin only)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Age-Based Pricing",
+      "item": [
+        {
+          "name": "Get All Age Price Rules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/age-price",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "age-price"]
+            },
+            "description": "Retrieves all age price tier rules."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Age Price Rule by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/age-price/{{agePriceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "age-price", "{{agePriceId}}"]
+            },
+            "description": "Retrieves a single age price rule by integer ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Age Price Rule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": \"{{categoryId}}\",\n  \"priceType\": \"SHARED\",\n  \"minDays\": 0,\n  \"maxDays\": 7,\n  \"priceCents\": 2000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/age-price",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "age-price"]
+            },
+            "description": "Creates an age pricing rule. priceType is SHARED or EXCLUSIVE. priceCents is in cents (2000 = $20.00)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Age Price Rule",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priceCents\": 2500,\n  \"maxDays\": 14\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/age-price/{{agePriceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "age-price", "{{agePriceId}}"]
+            },
+            "description": "Updates an age pricing tier rule by integer ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Age Price Rule",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/age-price/{{agePriceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "age-price", "{{agePriceId}}"]
+            },
+            "description": "Removes an age pricing rule by integer ID."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Leads",
+      "item": [
+        {
+          "name": "Create Lead (Multipart with Image)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('leadId', json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "categoryId",
+                  "value": "{{categoryId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "saleDate",
+                  "value": "2026-11-20T10:00:00.000Z",
+                  "type": "text"
+                },
+                {
+                  "key": "stage",
+                  "value": "Foreclosure stage",
+                  "type": "text"
+                },
+                {
+                  "key": "mortgageInformation",
+                  "value": "Conventional",
+                  "type": "text"
+                },
+                {
+                  "key": "availability",
+                  "value": "SHARED",
+                  "type": "text"
+                },
+                {
+                  "key": "sharedLimit",
+                  "value": "10",
+                  "type": "text"
+                },
+                {
+                  "key": "customPrice",
+                  "value": "1000",
+                  "type": "text"
+                },
+                {
+                  "key": "source",
+                  "value": "Internal",
+                  "type": "text"
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE",
+                  "type": "text"
+                },
+                {
+                  "key": "propertyType",
+                  "value": "Single Family",
+                  "type": "text"
+                },
+                {
+                  "key": "propertyAddress",
+                  "value": "123 Main Street",
+                  "type": "text"
+                },
+                {
+                  "key": "city",
+                  "value": "Anaheim",
+                  "type": "text"
+                },
+                {
+                  "key": "state",
+                  "value": "CA",
+                  "type": "text"
+                },
+                {
+                  "key": "zipcode",
+                  "value": "92801",
+                  "type": "text"
+                },
+                {
+                  "key": "estValue",
+                  "value": "685000",
+                  "type": "text"
+                },
+                {
+                  "key": "estEquity",
+                  "value": "85000",
+                  "type": "text"
+                },
+                {
+                  "key": "firstName",
+                  "value": "Michael",
+                  "type": "text"
+                },
+                {
+                  "key": "lastName",
+                  "value": "Anderson",
+                  "type": "text"
+                },
+                {
+                  "key": "phoneNumbers",
+                  "value": "[\"+0123 456 8910\"]",
+                  "type": "text"
+                },
+                {
+                  "key": "emailAddresses",
+                  "value": "[\"michael.anderson@example.com\"]",
+                  "type": "text"
+                },
+                {
+                  "key": "propertyImage",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/lead/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "lead", "create"]
+            },
+            "description": "Creates a new lead record with owner, property, and foreclosure info plus optional Cloudinary property image."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Leads",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/lead?page=1&limit=10&searchTerm=",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "lead"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "searchTerm",
+                  "value": ""
+                },
+                {
+                  "key": "categoryId",
+                  "value": "{{categoryId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE",
+                  "disabled": true
+                },
+                {
+                  "key": "availability",
+                  "value": "SHARED",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Fetches paginated list of leads with filtering and search."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Lead By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/lead/{{leadId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "lead", "{{leadId}}"]
+            },
+            "description": "Fetches a single lead by its UUID."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Lead",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "stage",
+                  "value": "Pre-Foreclosure",
+                  "type": "text"
+                },
+                {
+                  "key": "customPrice",
+                  "value": "1500",
+                  "type": "text"
+                },
+                {
+                  "key": "estValue",
+                  "value": "720000",
+                  "type": "text"
+                },
+                {
+                  "key": "propertyImage",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/lead/{{leadId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "lead", "{{leadId}}"]
+            },
+            "description": "Updates an existing lead with partial fields or a new property image."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Lead",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/lead/{{leadId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "lead", "{{leadId}}"]
+            },
+            "description": "Deletes a lead record by ID (Admin only)."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

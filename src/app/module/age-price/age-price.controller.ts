@@ -1,7 +1,100 @@
-import { Controller } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
+import { AuthGuard } from 'src/app/middlewares/auth.guard';
+import { PriceType } from '../../../../prisma/generated/prisma/enums';
 import { AgePriceService } from './age-price.service';
+import { CreateAgePriceDto } from './dto/create-age-price.dto';
+import { UpdateAgePriceDto } from './dto/update-age-price.dto';
 
+@ApiTags('Age Price Rules')
 @Controller('age-price')
 export class AgePriceController {
   constructor(private readonly agePriceService: AgePriceService) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create age-based pricing rule (Super Admin only)' })
+  @ApiBearerAuth('access-token')
+  @UseGuards(AuthGuard('superadmin', 'admin'))
+  @HttpCode(HttpStatus.CREATED)
+  async create(@Body() createAgePriceDto: CreateAgePriceDto) {
+    const result = await this.agePriceService.createAgePrice(createAgePriceDto);
+    return {
+      message: 'Age price rule created successfully',
+      data: result,
+    };
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get all age-based pricing rules' })
+  @ApiQuery({ name: 'categoryId', required: false, type: String })
+  @ApiQuery({ name: 'priceType', required: false, enum: PriceType })
+  @HttpCode(HttpStatus.OK)
+  async findAll(
+    @Query('categoryId') categoryId?: string,
+    @Query('priceType') priceType?: PriceType,
+  ) {
+    const result = await this.agePriceService.findAllAgePrice(
+      categoryId,
+      priceType,
+    );
+    return {
+      message: 'Age price rules fetched successfully',
+      data: result,
+    };
+  }
+  // 👇 নির্দিষ্ট রুল দেখা
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a single age price rule by ID' })
+  @HttpCode(HttpStatus.OK)
+  async findOne(@Param('id', ParseUUIDPipe) id: string) {
+    const result = await this.agePriceService.findOne(id);
+    return {
+      message: 'Age price rule fetched successfully',
+      data: result,
+    };
+  }
+  // 👇 রুল আপডেট (শুধুমাত্র Super Admin)
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update age price rule (Super Admin only)' })
+  @ApiBearerAuth('access-token')
+  @UseGuards(AuthGuard('superadmin'))
+  @HttpCode(HttpStatus.OK)
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateAgePriceDto: UpdateAgePriceDto,
+  ) {
+    const result = await this.agePriceService.update(id, updateAgePriceDto);
+    return {
+      message: 'Age price rule updated successfully',
+      data: result,
+    };
+  }
+  // 👇 রুল ডিলিট (শুধুমাত্র Super Admin)
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete age price rule (Super Admin only)' })
+  @ApiBearerAuth('access-token')
+  @UseGuards(AuthGuard('superadmin'))
+  @HttpCode(HttpStatus.OK)
+  async remove(@Param('id', ParseUUIDPipe) id: string) {
+    const result = await this.agePriceService.remove(id);
+    return result;
+  }
 }

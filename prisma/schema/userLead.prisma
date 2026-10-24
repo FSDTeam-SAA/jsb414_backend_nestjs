@@ -1,0 +1,14 @@
+model UserLead {
+  id          String           @id @default(uuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leadId      String
+  lead        Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  priceType   LeadAvailability // SHARED নাকি EXCLUSIVE কিনেছে
+  pricePaid   Int // কেনার সময় কত সেন্ট দিয়ে কিনেছিল
+  orderId     String? // কোন অর্ডারে কেনা হয়েছে
+  purchasedAt DateTime         @default(now())
+
+  @@unique([userId, leadId])
+  @@map("user_leads")
+}

@@ -1,0 +1,12 @@
+model CartItem {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leadId    String
+  lead      Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  priceType LeadAvailability // SHARED অথবা EXCLUSIVE হিসেবে কার্টে নিয়েছে
+  createdAt DateTime         @default(now())
+
+  @@unique([userId, leadId]) // একই ইউজার একই লিড দুইবার কার্টে নিতে পারবে না
+  @@map("cart_items")
+}

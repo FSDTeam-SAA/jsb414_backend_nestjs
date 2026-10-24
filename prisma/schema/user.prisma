@@ -8,6 +8,8 @@ model User {
     photo       String?
     role        UserRole @default(user)
 
+    walletBalanceCents Int @default(0)
+
     otp            String?
     otpExpiry      DateTime?
     verifiedForget Boolean?
@@ -17,11 +19,11 @@ model User {
     userSubscribes UserSubscribe[]
     payments       Payment[]
     lead           Lead[]
+    cartItems      CartItem[]
+    userLead       UserLead[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
     @@map("users")
 }
-
-//$2b$10$LAi32D2VIJ61tArt4zbk/egBnah0z4s8OTH6UON4MxbliQaWQ691m

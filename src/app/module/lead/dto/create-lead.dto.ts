@@ -2,7 +2,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
-  ArrayNotEmpty,
   IsArray,
   IsDateString,
   IsEnum,
@@ -12,7 +11,10 @@ import {
   IsString,
   Min,
 } from 'class-validator';
-import { LeadAvailability, LeadStatus } from '../../../../../prisma/generated/prisma/enums';
+import {
+  LeadAvailability,
+  LeadStatus,
+} from '../../../../../prisma/generated/prisma/enums';
 
 // Helper to handle form-data or JSON parsing for string arrays
 function transformStringArray({ value }: { value: any }): string[] {
@@ -60,7 +62,8 @@ export class CreateLeadDto {
 
   @ApiPropertyOptional({
     example: 'Conventional',
-    description: 'Mortgage information (e.g. Conventional, FHA, balance details)',
+    description:
+      'Mortgage information (e.g. Conventional, FHA, balance details)',
   })
   @IsOptional()
   @IsString()
@@ -128,7 +131,8 @@ export class CreateLeadDto {
 
   @ApiPropertyOptional({
     example: 'Single Family',
-    description: 'Property type (Single Family, Multi Family, Commercial, etc.)',
+    description:
+      'Property type (Single Family, Multi Family, Commercial, etc.)',
   })
   @IsOptional()
   @IsString()
@@ -177,12 +181,18 @@ export class CreateLeadDto {
   @Min(0)
   estEquity?: number;
 
-  @ApiPropertyOptional({ example: 'Michael', description: 'Property owner first name' })
+  @ApiPropertyOptional({
+    example: 'Michael',
+    description: 'Property owner first name',
+  })
   @IsOptional()
   @IsString()
   firstName?: string;
 
-  @ApiPropertyOptional({ example: 'Anderson', description: 'Property owner last name' })
+  @ApiPropertyOptional({
+    example: 'Anderson',
+    description: 'Property owner last name',
+  })
   @IsOptional()
   @IsString()
   lastName?: string;

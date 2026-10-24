@@ -1,7 +1,5 @@
 import {
   BadRequestException,
-  HttpException,
-  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -365,18 +363,26 @@ export class LeadService {
       }
 
       // 3. String & Numeric fields
-      const stage = this.getFieldValue(row, ['stage', 'foreclosurestage', 'foreclosure_stage']);
+      const stage = this.getFieldValue(row, [
+        'stage',
+        'foreclosurestage',
+        'foreclosure_stage',
+      ]);
       const mortgageInformation = this.getFieldValue(row, [
         'mortgageinformation',
         'mortgage_information',
         'mortgage',
       ]);
       const source =
-        this.getFieldValue(row, ['source']) || file.originalname || 'Spreadsheet Import';
+        this.getFieldValue(row, ['source']) ||
+        file.originalname ||
+        'Spreadsheet Import';
       const rawAvailability = (
         this.getFieldValue(row, ['availability']) || 'SHARED'
       ).toUpperCase();
-      const availability = ['SHARED', 'EXCLUSIVE', 'BOTH'].includes(rawAvailability)
+      const availability = ['SHARED', 'EXCLUSIVE', 'BOTH'].includes(
+        rawAvailability,
+      )
         ? (rawAvailability as any)
         : 'SHARED';
 
@@ -384,11 +390,19 @@ export class LeadService {
         this.getFieldValue(row, ['sharedlimit', 'shared_limit']),
       );
       const customPrice = this.parseNumber(
-        this.getFieldValue(row, ['customprice', 'custom_price', 'price', 'baseprice']),
+        this.getFieldValue(row, [
+          'customprice',
+          'custom_price',
+          'price',
+          'baseprice',
+        ]),
       );
-      const status =
-        this.getFieldValue(row, ['status']) || 'ACTIVE';
-      const propertyType = this.getFieldValue(row, ['propertytype', 'property_type', 'type']);
+      const status = this.getFieldValue(row, ['status']) || 'ACTIVE';
+      const propertyType = this.getFieldValue(row, [
+        'propertytype',
+        'property_type',
+        'type',
+      ]);
       const propertyAddress = this.getFieldValue(row, [
         'propertyaddress',
         'property_address',
@@ -399,20 +413,47 @@ export class LeadService {
       const state = this.getFieldValue(row, ['state']);
       const zipcode = this.getFieldValue(row, ['zipcode', 'zip', 'postalcode']);
       const estValue = this.parseNumber(
-        this.getFieldValue(row, ['estvalue', 'est_value', 'value', 'estimatedvalue']),
+        this.getFieldValue(row, [
+          'estvalue',
+          'est_value',
+          'value',
+          'estimatedvalue',
+        ]),
       );
       const estEquity = this.parseNumber(
-        this.getFieldValue(row, ['estequity', 'est_equity', 'equity', 'estimatedequity']),
+        this.getFieldValue(row, [
+          'estequity',
+          'est_equity',
+          'equity',
+          'estimatedequity',
+        ]),
       );
       const firstName = this.getFieldValue(row, ['firstname', 'first_name']);
       const lastName = this.getFieldValue(row, ['lastname', 'last_name']);
-      const propertyImage = this.getFieldValue(row, ['propertyimage', 'property_image', 'image', 'imageurl']);
+      const propertyImage = this.getFieldValue(row, [
+        'propertyimage',
+        'property_image',
+        'image',
+        'imageurl',
+      ]);
 
       // 4. Arrays: phone numbers and emails
-      const rawPhones = this.getFieldValue(row, ['phonenumbers', 'phone_numbers', 'phones', 'phone', 'phonenumber']);
+      const rawPhones = this.getFieldValue(row, [
+        'phonenumbers',
+        'phone_numbers',
+        'phones',
+        'phone',
+        'phonenumber',
+      ]);
       const phoneNumbers = this.parseStringArray(rawPhones);
 
-      const rawEmails = this.getFieldValue(row, ['emailaddresses', 'email_addresses', 'emails', 'email', 'emailaddress']);
+      const rawEmails = this.getFieldValue(row, [
+        'emailaddresses',
+        'email_addresses',
+        'emails',
+        'email',
+        'emailaddress',
+      ]);
       const emailAddresses = this.parseStringArray(rawEmails);
 
       leadsToCreate.push({
@@ -461,22 +502,25 @@ export class LeadService {
     };
   }
 
-  private parseSpreadsheetFile(file: Express.Multer.File): Record<string, any>[] {
+  private parseSpreadsheetFile(
+    file: Express.Multer.File,
+  ): Record<string, any>[] {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const isCsv =
       file.mimetype === 'text/csv' ||
       file.originalname.toLowerCase().endsWith('.csv');
 
     // XLSX library supports CSV, XLSX, XLS directly from buffer
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const xlsx = require('xlsx');
     const workbook = xlsx.read(file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     if (!sheetName) return [];
 
     const worksheet = workbook.Sheets[sheetName];
-    const rawRows = xlsx.utils.sheet_to_json(worksheet, { defval: '' }) as Record<
-      string,
-      any
-    >[];
+    const rawRows = xlsx.utils.sheet_to_json(worksheet, {
+      defval: '',
+    }) as Record<string, any>[];
 
     // Normalize keys to lowercase stripped of spaces/underscores for flexible matching
     return rawRows.map((row) => {
@@ -489,10 +533,17 @@ export class LeadService {
     });
   }
 
-  private getFieldValue(row: Record<string, any>, possibleKeys: string[]): string | undefined {
+  private getFieldValue(
+    row: Record<string, any>,
+    possibleKeys: string[],
+  ): string | undefined {
     for (const key of possibleKeys) {
       const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (row[cleanKey] !== undefined && row[cleanKey] !== null && String(row[cleanKey]).trim() !== '') {
+      if (
+        row[cleanKey] !== undefined &&
+        row[cleanKey] !== null &&
+        String(row[cleanKey]).trim() !== ''
+      ) {
         return String(row[cleanKey]).trim();
       }
     }
@@ -502,6 +553,7 @@ export class LeadService {
   private parseNumber(val?: string | number): number | undefined {
     if (val === undefined || val === null || val === '') return undefined;
     if (typeof val === 'number') return isNaN(val) ? undefined : val;
+    // eslint-disable-next-line no-useless-escape
     const cleanStr = String(val).replace(/[\$,]/g, '').trim();
     const num = Number(cleanStr);
     return isNaN(num) ? undefined : num;
@@ -509,13 +561,15 @@ export class LeadService {
 
   private parseStringArray(val?: any): string[] {
     if (!val) return [];
-    if (Array.isArray(val)) return val.map((s) => String(s).trim()).filter(Boolean);
+    if (Array.isArray(val))
+      return val.map((s) => String(s).trim()).filter(Boolean);
     const str = String(val).trim();
     if (!str) return [];
     if (str.startsWith('[') && str.endsWith(']')) {
       try {
         const parsed = JSON.parse(str);
-        if (Array.isArray(parsed)) return parsed.map((s) => String(s).trim()).filter(Boolean);
+        if (Array.isArray(parsed))
+          return parsed.map((s) => String(s).trim()).filter(Boolean);
       } catch {
         // Fall back to splitting
       }
@@ -526,4 +580,3 @@ export class LeadService {
       .filter(Boolean);
   }
 }
-

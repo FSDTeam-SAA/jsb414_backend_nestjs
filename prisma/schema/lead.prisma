@@ -8,6 +8,7 @@ model Lead {
   propertyAddress         String?
   unitNumber              String?
   city                    String?
+  price                   String?
   county                  String?
   state                   String?
   zipcode                 String?

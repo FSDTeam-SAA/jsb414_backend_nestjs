@@ -20,7 +20,6 @@ export class LeadService {
     adminId: string,
     file?: Express.Multer.File,
   ) {
-    // 1. Verify category exists
     const category = await this.prisma.catagorie.findUnique({
       where: { id: createLeadDto.categoryId },
     });
@@ -30,24 +29,23 @@ export class LeadService {
       );
     }
 
-    // 2. Upload property image to Cloudinary if provided
     let imageUrl = createLeadDto.propertyImage;
     if (file) {
       const uploadRes = await fileUpload.uploadToCloudinary(file);
       imageUrl = uploadRes.url;
     }
 
-    // 3. Prepare data for Prisma
     const {
       categoryId,
       saleDate,
       stage,
       mortgageInformation,
-      source,
-      availability,
+      source = 'Internal',
+      availability = 'SHARED',
       sharedLimit,
+      priceCents,
       customPrice,
-      status,
+      status = 'ACTIVE',
       propertyType,
       propertyAddress,
       city,
@@ -57,21 +55,50 @@ export class LeadService {
       estEquity,
       firstName,
       lastName,
-      phoneNumbers,
-      emailAddresses,
+      phoneNumbers = [],
+      emailAddresses = [],
     } = createLeadDto;
+
+    const custom = priceCents ?? customPrice;
+
+    // Availability অনুযায়ী অটোমেটিক প্রাইস রিজলভ
+    let sharedBasePriceCents: number | null = null;
+    let exclusiveBasePriceCents: number | null = null;
+
+    if (availability === 'SHARED') {
+      sharedBasePriceCents =
+        custom !== undefined
+          ? Number(custom)
+          : (category.sharedBasePriceCents ?? 2000);
+    } else if (availability === 'EXCLUSIVE') {
+      exclusiveBasePriceCents =
+        custom !== undefined
+          ? Number(custom)
+          : (category.exclusiveBasePriceCents ?? 5000);
+    } else if (availability === 'BOTH') {
+      sharedBasePriceCents =
+        custom !== undefined
+          ? Number(custom)
+          : (category.sharedBasePriceCents ?? 2000);
+      exclusiveBasePriceCents = category.exclusiveBasePriceCents ?? 5000;
+    }
 
     const lead = await this.prisma.lead.create({
       data: {
         categoryId,
         adminId,
+        source: source || 'Internal',
         saleDate: saleDate ? new Date(saleDate) : undefined,
         stage,
         mortgageInformation,
-        source: source || 'Internal',
-        availability: availability || 'SHARED',
-        sharedLimit: sharedLimit ? Number(sharedLimit) : undefined,
-        sharedBasePriceCents: customPrice ? Number(customPrice) : undefined,
+        availability,
+        sharedLimit: sharedLimit
+          ? Number(sharedLimit)
+          : availability !== 'EXCLUSIVE'
+            ? 5
+            : null,
+        sharedBasePriceCents,
+        exclusiveBasePriceCents,
         status: status || 'ACTIVE',
         propertyImage: imageUrl,
         propertyType,
@@ -214,6 +241,7 @@ export class LeadService {
       source,
       availability,
       sharedLimit,
+      priceCents,
       customPrice,
       status,
       propertyType,
@@ -241,8 +269,19 @@ export class LeadService {
         ...(sharedLimit !== undefined && {
           sharedLimit: sharedLimit ? Number(sharedLimit) : null,
         }),
-        ...(customPrice !== undefined && {
-          sharedBasePriceCents: customPrice ? Number(customPrice) : null,
+        ...((priceCents ?? customPrice) !== undefined && {
+          sharedBasePriceCents:
+            (availability ?? existing.availability) !== 'EXCLUSIVE'
+              ? (priceCents ?? customPrice)
+                ? Number(priceCents ?? customPrice)
+                : null
+              : null,
+          exclusiveBasePriceCents:
+            (availability ?? existing.availability) !== 'SHARED'
+              ? (priceCents ?? customPrice)
+                ? Number(priceCents ?? customPrice)
+                : null
+              : null,
         }),
         ...(status !== undefined && { status }),
         ...(imageUrl !== undefined && { propertyImage: imageUrl }),

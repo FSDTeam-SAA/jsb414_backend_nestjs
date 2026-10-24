@@ -139,6 +139,17 @@ export class CreateLeadDto {
   propertyType?: string;
 
   @ApiPropertyOptional({
+    example: 2000,
+    description:
+      'Custom price in cents. If empty, category default price will be used automatically.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'priceCents must be an integer' })
+  @Min(0)
+  priceCents?: number;
+
+  @ApiPropertyOptional({
     example: '123 Main Street',
     description: 'Property street address',
   })

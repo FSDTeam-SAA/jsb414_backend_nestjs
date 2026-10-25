@@ -12,6 +12,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { LeadModule } from './app/module/lead/lead.module';
 import { AgePriceModule } from './app/module/age-price/age-price.module';
 import { MarketplaceModule } from './app/module/marketplace/marketplace.module';
+import { CardModule } from './app/module/card/card.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { MarketplaceModule } from './app/module/marketplace/marketplace.module';
     LeadModule,
     AgePriceModule,
     MarketplaceModule,
+    CardModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

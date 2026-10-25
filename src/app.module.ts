@@ -13,6 +13,7 @@ import { LeadModule } from './app/module/lead/lead.module';
 import { AgePriceModule } from './app/module/age-price/age-price.module';
 import { MarketplaceModule } from './app/module/marketplace/marketplace.module';
 import { CardModule } from './app/module/card/card.module';
+import { SavedSearcModule } from './app/module/saved-searc/saved-searc.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { CardModule } from './app/module/card/card.module';
     AgePriceModule,
     MarketplaceModule,
     CardModule,
+    SavedSearcModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

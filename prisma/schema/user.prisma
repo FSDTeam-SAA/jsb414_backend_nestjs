@@ -21,6 +21,7 @@ model User {
     lead           Lead[]
     cartItems      CartItem[]
     userLead       UserLead[]
+    savedSearches  SavedSearch[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

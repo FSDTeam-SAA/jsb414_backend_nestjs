@@ -69,9 +69,7 @@ export class LeadController {
   @ApiConsumes('multipart/form-data')
   @ApiBearerAuth('access-token')
   @UseGuards(AuthGuard('admin', 'superadmin'))
-  @UseInterceptors(
-    FileInterceptor('file', fileUpload.documentUploadConfig),
-  )
+  @UseInterceptors(FileInterceptor('file', fileUpload.documentUploadConfig))
   @HttpCode(HttpStatus.CREATED)
   async bulkUploadLeads(
     @Req() req: Request,
@@ -105,6 +103,8 @@ export class LeadController {
   @ApiQuery({ name: 'limit', required: false, type: 'number' })
   @ApiQuery({ name: 'sortBy', required: false, type: 'string' })
   @ApiQuery({ name: 'sortOrder', required: false, type: 'string' })
+  @ApiBearerAuth('access-token')
+  @UseGuards(AuthGuard('admin', 'superadmin'))
   @HttpCode(HttpStatus.OK)
   async getAllLeads(@Req() req: Request) {
     const filters = pick(req.query, [
@@ -131,6 +131,8 @@ export class LeadController {
   @ApiOperation({
     summary: 'Get a single lead by ID',
   })
+  @ApiBearerAuth('access-token')
+  @UseGuards(AuthGuard('admin', 'superadmin'))
   @HttpCode(HttpStatus.OK)
   async getLeadById(@Param('id') id: string) {
     const result = await this.leadService.getSingleLead(id);
@@ -144,7 +146,7 @@ export class LeadController {
   @ApiOperation({
     summary: 'Update a lead with optional property image',
   })
-  @ApiConsumes('multipart/form-data', 'application/json')
+  @ApiConsumes('application/json', 'multipart/form-data')
   @ApiBearerAuth('access-token')
   @UseGuards(AuthGuard('admin', 'superadmin'))
   @UseInterceptors(FileInterceptor('propertyImage', fileUpload.uploadConfig))

@@ -34,11 +34,34 @@ export class CategoriesService {
       createCategorieDto.logo = url;
     }
 
+    // const result = await this.prisma.catagorie.create({
+    //   data: {
+    //     name: name,
+    //     description: description,
+    //     logo: createCategorieDto.logo,
+    //   },
+    // });
     const result = await this.prisma.catagorie.create({
       data: {
         name: name,
         description: description,
         logo: createCategorieDto.logo,
+        isActive:
+          createCategorieDto.isActive !== undefined
+            ? createCategorieDto.isActive
+            : true,
+        agePricingEnabled:
+          createCategorieDto.agePricingEnabled !== undefined
+            ? createCategorieDto.agePricingEnabled
+            : false,
+        sharedBasePriceCents:
+          createCategorieDto.sharedBasePriceCents !== undefined
+            ? Number(createCategorieDto.sharedBasePriceCents)
+            : 2000,
+        exclusiveBasePriceCents:
+          createCategorieDto.exclusiveBasePriceCents !== undefined
+            ? Number(createCategorieDto.exclusiveBasePriceCents)
+            : 5000,
       },
     });
 

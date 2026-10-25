@@ -16,7 +16,6 @@ import {
   LeadStatus,
 } from '../../../../../prisma/generated/prisma/enums';
 
-// Helper to handle form-data or JSON parsing for string arrays
 function transformStringArray({ value }: { value: any }): string[] {
   if (!value) return [];
   if (Array.isArray(value)) return value.map(String);
@@ -25,7 +24,6 @@ function transformStringArray({ value }: { value: any }): string[] {
       const parsed = JSON.parse(value);
       if (Array.isArray(parsed)) return parsed.map(String);
     } catch {
-      // If comma-separated
       if (value.includes(',')) {
         return value.split(',').map((s) => s.trim());
       }
@@ -37,23 +35,23 @@ function transformStringArray({ value }: { value: any }): string[] {
 
 export class CreateLeadDto {
   @ApiProperty({
-    example: 'b2f6c0b3-1e5b-4c28-9846-52c6f103d3c7',
+    example: 'd060fbee-39bc-44fe-ab7e-aaf5f12b806d',
     description: 'Category ID (e.g., Foreclosure, Pre-Foreclosure)',
   })
   @IsString()
   @IsNotEmpty({ message: 'categoryId is required' })
   categoryId!: string;
 
-  @ApiProperty({
-    example: '2026-11-20T10:00:00.000Z',
+  @ApiPropertyOptional({
+    example: '2026-12-05T14:30:00.000Z',
     description: 'Lead or Auction Sale Date (ISO Date string)',
   })
   @IsDateString({}, { message: 'saleDate must be a valid ISO date string' })
-  @IsNotEmpty({ message: 'saleDate is required' })
-  saleDate!: string;
+  @IsOptional()
+  saleDate?: string;
 
   @ApiPropertyOptional({
-    example: 'Foreclosure stage',
+    example: 'Notice of Default',
     description: 'Stage of the foreclosure (e.g. Notice of Default, Auction)',
   })
   @IsOptional()
@@ -62,8 +60,7 @@ export class CreateLeadDto {
 
   @ApiPropertyOptional({
     example: 'Conventional',
-    description:
-      'Mortgage information (e.g. Conventional, FHA, balance details)',
+    description: 'Mortgage information (e.g. Conventional, FHA, balance details)',
   })
   @IsOptional()
   @IsString()
@@ -91,7 +88,7 @@ export class CreateLeadDto {
   availability?: LeadAvailability;
 
   @ApiPropertyOptional({
-    example: 10,
+    example: 5,
     description: 'Maximum number of times this lead can be shared',
   })
   @IsOptional()
@@ -101,14 +98,14 @@ export class CreateLeadDto {
   sharedLimit?: number;
 
   @ApiPropertyOptional({
-    example: 1000,
-    description: 'Custom price in cents or amount (e.g., $10 = 1000 cents)',
+    description:
+      'Optional manual price override in cents (e.g., 2500 for $25). If empty, category default price will be used automatically.',
   })
   @IsOptional()
   @Type(() => Number)
-  @IsInt({ message: 'customPrice must be an integer' })
+  @IsInt({ message: 'priceCents must be an integer' })
   @Min(0)
-  customPrice?: number;
+  priceCents?: number;
 
   @ApiPropertyOptional({
     enum: LeadStatus,
@@ -131,49 +128,47 @@ export class CreateLeadDto {
 
   @ApiPropertyOptional({
     example: 'Single Family',
-    description:
-      'Property type (Single Family, Multi Family, Commercial, etc.)',
+    description: 'Property type (Single Family, Multi Family, Commercial, etc.)',
   })
   @IsOptional()
   @IsString()
   propertyType?: string;
 
   @ApiPropertyOptional({
-    example: 2000,
-    description:
-      'Custom price in cents. If empty, category default price will be used automatically.',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt({ message: 'priceCents must be an integer' })
-  @Min(0)
-  priceCents?: number;
-
-  @ApiPropertyOptional({
-    example: '123 Main Street',
+    example: '1040 Biscayne Blvd',
     description: 'Property street address',
   })
   @IsOptional()
   @IsString()
   propertyAddress?: string;
 
-  @ApiPropertyOptional({ example: 'Anaheim', description: 'City name' })
+  @ApiPropertyOptional({ example: 'Apt 14B', description: 'Unit or apartment number' })
+  @IsOptional()
+  @IsString()
+  unitNumber?: string;
+
+  @ApiPropertyOptional({ example: 'Miami', description: 'City name' })
   @IsOptional()
   @IsString()
   city?: string;
 
-  @ApiPropertyOptional({ example: 'CA', description: 'State code or name' })
+  @ApiPropertyOptional({ example: 'FL', description: 'State code or name' })
   @IsOptional()
   @IsString()
   state?: string;
 
-  @ApiPropertyOptional({ example: '92801', description: 'ZIP code' })
+  @ApiPropertyOptional({ example: '33132', description: 'ZIP code' })
   @IsOptional()
   @IsString()
   zipcode?: string;
 
+  @ApiPropertyOptional({ example: 'Miami-Dade County', description: 'County name' })
+  @IsOptional()
+  @IsString()
+  county?: string;
+
   @ApiPropertyOptional({
-    example: 685000,
+    example: 520000,
     description: 'Estimated property value',
   })
   @IsOptional()
@@ -183,7 +178,7 @@ export class CreateLeadDto {
   estValue?: number;
 
   @ApiPropertyOptional({
-    example: 85000,
+    example: 140000,
     description: 'Estimated equity amount',
   })
   @IsOptional()
@@ -193,7 +188,17 @@ export class CreateLeadDto {
   estEquity?: number;
 
   @ApiPropertyOptional({
-    example: 'Michael',
+    example: 380000,
+    description: 'Mortgage loan balance',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'mortgageBalance must be an integer' })
+  @Min(0)
+  mortgageBalance?: number;
+
+  @ApiPropertyOptional({
+    example: 'Robert',
     description: 'Property owner first name',
   })
   @IsOptional()
@@ -201,7 +206,7 @@ export class CreateLeadDto {
   firstName?: string;
 
   @ApiPropertyOptional({
-    example: 'Anderson',
+    example: 'Martinez',
     description: 'Property owner last name',
   })
   @IsOptional()
@@ -210,7 +215,7 @@ export class CreateLeadDto {
 
   @ApiPropertyOptional({
     type: [String],
-    example: ['+0123 456 8910'],
+    example: ['(305) 555-0199'],
     description: 'List of owner phone numbers',
   })
   @IsOptional()
@@ -221,7 +226,7 @@ export class CreateLeadDto {
 
   @ApiPropertyOptional({
     type: [String],
-    example: ['michael.anderson@example.com'],
+    example: ['robert.m@example.com'],
     description: 'List of owner email addresses',
   })
   @IsOptional()

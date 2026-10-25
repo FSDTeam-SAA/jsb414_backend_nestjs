@@ -15,6 +15,7 @@ import { UpdateLeadDto } from './dto/update-lead.dto';
 export class LeadService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // 1. নতুন লিড তৈরি (সহজ, পরিষ্কার ও স্বয়ংক্রিয় প্রাইসিং)
   async createLead(
     createLeadDto: CreateLeadDto,
     adminId: string,
@@ -23,6 +24,7 @@ export class LeadService {
     const category = await this.prisma.catagorie.findUnique({
       where: { id: createLeadDto.categoryId },
     });
+
     if (!category) {
       throw new NotFoundException(
         `Category with ID '${createLeadDto.categoryId}' not found`,
@@ -35,83 +37,84 @@ export class LeadService {
       imageUrl = uploadRes.url;
     }
 
-    const {
-      categoryId,
-      saleDate,
-      stage,
-      mortgageInformation,
-      source = 'Internal',
-      availability = 'SHARED',
-      sharedLimit,
-      priceCents,
-      customPrice,
-      status = 'ACTIVE',
-      propertyType,
-      propertyAddress,
-      city,
-      state,
-      zipcode,
-      estValue,
-      estEquity,
-      firstName,
-      lastName,
-      phoneNumbers = [],
-      emailAddresses = [],
-    } = createLeadDto;
+    // প্রাইস ক্যালকুলেশন: ইউজার যদি ম্যানুয়ালি কাস্টম priceCents দেয় তবে সেটা বসবে, অন্যথায় ক্যাটাগরির প্রাইস অটো বসবে
+    const customPrice =
+      createLeadDto.priceCents !== undefined &&
+      createLeadDto.priceCents !== null &&
+      String(createLeadDto.priceCents).trim() !== '' &&
+      Number(createLeadDto.priceCents) > 0
+        ? Number(createLeadDto.priceCents)
+        : null;
 
-    const custom = priceCents ?? customPrice;
-
-    // Availability অনুযায়ী অটোমেটিক প্রাইস রিজলভ
+    const availability = createLeadDto.availability || 'SHARED';
     let sharedBasePriceCents: number | null = null;
     let exclusiveBasePriceCents: number | null = null;
 
     if (availability === 'SHARED') {
-      sharedBasePriceCents =
-        custom !== undefined
-          ? Number(custom)
-          : (category.sharedBasePriceCents ?? 2000);
+      sharedBasePriceCents = customPrice ?? category.sharedBasePriceCents;
+      exclusiveBasePriceCents = null;
     } else if (availability === 'EXCLUSIVE') {
-      exclusiveBasePriceCents =
-        custom !== undefined
-          ? Number(custom)
-          : (category.exclusiveBasePriceCents ?? 5000);
+      exclusiveBasePriceCents = customPrice ?? category.exclusiveBasePriceCents;
+      sharedBasePriceCents = null;
     } else if (availability === 'BOTH') {
-      sharedBasePriceCents =
-        custom !== undefined
-          ? Number(custom)
-          : (category.sharedBasePriceCents ?? 2000);
-      exclusiveBasePriceCents = category.exclusiveBasePriceCents ?? 5000;
+      sharedBasePriceCents = customPrice ?? category.sharedBasePriceCents;
+      exclusiveBasePriceCents = category.exclusiveBasePriceCents;
     }
+
+    // ঠিকানা ও ফোন/ইমেইল থাকলে অটোমেটিক SELLABLE
+    const hasAddress = Boolean(
+      createLeadDto.propertyAddress?.trim() &&
+        createLeadDto.city?.trim() &&
+        createLeadDto.state?.trim(),
+    );
+    const hasContact = Boolean(
+      (createLeadDto.phoneNumbers && createLeadDto.phoneNumbers.length > 0) ||
+        (createLeadDto.emailAddresses && createLeadDto.emailAddresses.length > 0),
+    );
+    const classification =
+      hasAddress && hasContact ? 'SELLABLE' : 'NEEDS_ENRICHMENT';
 
     const lead = await this.prisma.lead.create({
       data: {
-        categoryId,
+        categoryId: createLeadDto.categoryId,
         adminId,
-        source: source || 'Internal',
-        saleDate: saleDate ? new Date(saleDate) : undefined,
-        stage,
-        mortgageInformation,
+        classification,
+        source: createLeadDto.source || 'Internal',
+        saleDate: createLeadDto.saleDate
+          ? new Date(createLeadDto.saleDate)
+          : undefined,
+        stage: createLeadDto.stage,
+        mortgageInformation: createLeadDto.mortgageInformation,
+        mortgageBalance: createLeadDto.mortgageBalance
+          ? Number(createLeadDto.mortgageBalance)
+          : undefined,
         availability,
-        sharedLimit: sharedLimit
-          ? Number(sharedLimit)
+        sharedLimit: createLeadDto.sharedLimit
+          ? Number(createLeadDto.sharedLimit)
           : availability !== 'EXCLUSIVE'
             ? 5
             : null,
         sharedBasePriceCents,
         exclusiveBasePriceCents,
-        status: status || 'ACTIVE',
+        status: createLeadDto.status || 'ACTIVE',
         propertyImage: imageUrl,
-        propertyType,
-        propertyAddress,
-        city,
-        state,
-        zipcode,
-        estValue: estValue ? Number(estValue) : undefined,
-        estEquity: estEquity ? Number(estEquity) : undefined,
-        firstName,
-        lastName,
-        phoneNumbers: phoneNumbers || [],
-        emailAddresses: emailAddresses || [],
+        propertyType: createLeadDto.propertyType,
+        propertyAddress: createLeadDto.propertyAddress,
+        unitNumber: createLeadDto.unitNumber,
+        city: createLeadDto.city,
+        state: createLeadDto.state,
+        zipcode: createLeadDto.zipcode,
+        county: createLeadDto.county,
+        estValue: createLeadDto.estValue
+          ? Number(createLeadDto.estValue)
+          : undefined,
+        estEquity: createLeadDto.estEquity
+          ? Number(createLeadDto.estEquity)
+          : undefined,
+        firstName: createLeadDto.firstName,
+        lastName: createLeadDto.lastName,
+        phoneNumbers: createLeadDto.phoneNumbers || [],
+        emailAddresses: createLeadDto.emailAddresses || [],
       },
       include: {
         category: true,
@@ -128,6 +131,7 @@ export class LeadService {
     return lead;
   }
 
+  // 2. সকল লিড দেখা (অ্যাডমিনের জন্য)
   async getAllLeads(params: IFilterParams, options: IOptions) {
     const { limit, page, skip, sortBy, sortOrder } = paginationHelper(options);
     const searchableFields = [
@@ -136,6 +140,7 @@ export class LeadService {
       'propertyAddress',
       'city',
       'state',
+      'county',
       'zipcode',
       'stage',
       'source',
@@ -179,6 +184,7 @@ export class LeadService {
     };
   }
 
+  // 3. সিঙ্গেল লিড বিস্তারিত
   async getSingleLead(id: string) {
     const lead = await this.prisma.lead.findUnique({
       where: { id },
@@ -201,6 +207,7 @@ export class LeadService {
     return lead;
   }
 
+  // 4. লিড আপডেট
   async updateLead(
     id: string,
     updateLeadDto: UpdateLeadDto,
@@ -233,73 +240,100 @@ export class LeadService {
       imageUrl = updateLeadDto.propertyImage;
     }
 
-    const {
-      categoryId,
-      saleDate,
-      stage,
-      mortgageInformation,
-      source,
-      availability,
-      sharedLimit,
-      priceCents,
-      customPrice,
-      status,
-      propertyType,
-      propertyAddress,
-      city,
-      state,
-      zipcode,
-      estValue,
-      estEquity,
-      firstName,
-      lastName,
-      phoneNumbers,
-      emailAddresses,
-    } = updateLeadDto;
+    let sharedBasePriceCents = existing.sharedBasePriceCents;
+    let exclusiveBasePriceCents = existing.exclusiveBasePriceCents;
+
+    if (updateLeadDto.priceCents !== undefined) {
+      const newPrice =
+        updateLeadDto.priceCents !== null && Number(updateLeadDto.priceCents) > 0
+          ? Number(updateLeadDto.priceCents)
+          : null;
+      const targetAvailability =
+        updateLeadDto.availability || existing.availability;
+
+      if (targetAvailability === 'SHARED') {
+        sharedBasePriceCents = newPrice;
+        exclusiveBasePriceCents = null;
+      } else if (targetAvailability === 'EXCLUSIVE') {
+        exclusiveBasePriceCents = newPrice;
+        sharedBasePriceCents = null;
+      } else if (targetAvailability === 'BOTH') {
+        sharedBasePriceCents = newPrice;
+      }
+    }
 
     const updated = await this.prisma.lead.update({
       where: { id },
       data: {
-        ...(categoryId && { categoryId }),
-        ...(saleDate && { saleDate: new Date(saleDate) }),
-        ...(stage !== undefined && { stage }),
-        ...(mortgageInformation !== undefined && { mortgageInformation }),
-        ...(source !== undefined && { source }),
-        ...(availability && { availability }),
-        ...(sharedLimit !== undefined && {
-          sharedLimit: sharedLimit ? Number(sharedLimit) : null,
+        ...(updateLeadDto.categoryId && { categoryId: updateLeadDto.categoryId }),
+        ...(updateLeadDto.saleDate && {
+          saleDate: new Date(updateLeadDto.saleDate),
         }),
-        ...((priceCents ?? customPrice) !== undefined && {
-          sharedBasePriceCents:
-            (availability ?? existing.availability) !== 'EXCLUSIVE'
-              ? (priceCents ?? customPrice)
-                ? Number(priceCents ?? customPrice)
-                : null
-              : null,
-          exclusiveBasePriceCents:
-            (availability ?? existing.availability) !== 'SHARED'
-              ? (priceCents ?? customPrice)
-                ? Number(priceCents ?? customPrice)
-                : null
-              : null,
+        ...(updateLeadDto.stage !== undefined && { stage: updateLeadDto.stage }),
+        ...(updateLeadDto.mortgageInformation !== undefined && {
+          mortgageInformation: updateLeadDto.mortgageInformation,
         }),
-        ...(status !== undefined && { status }),
+        ...(updateLeadDto.mortgageBalance !== undefined && {
+          mortgageBalance: updateLeadDto.mortgageBalance
+            ? Number(updateLeadDto.mortgageBalance)
+            : null,
+        }),
+        ...(updateLeadDto.source !== undefined && {
+          source: updateLeadDto.source,
+        }),
+        ...(updateLeadDto.availability && {
+          availability: updateLeadDto.availability,
+        }),
+        ...(updateLeadDto.sharedLimit !== undefined && {
+          sharedLimit: updateLeadDto.sharedLimit
+            ? Number(updateLeadDto.sharedLimit)
+            : null,
+        }),
+        sharedBasePriceCents,
+        exclusiveBasePriceCents,
+        ...(updateLeadDto.status !== undefined && {
+          status: updateLeadDto.status,
+        }),
         ...(imageUrl !== undefined && { propertyImage: imageUrl }),
-        ...(propertyType !== undefined && { propertyType }),
-        ...(propertyAddress !== undefined && { propertyAddress }),
-        ...(city !== undefined && { city }),
-        ...(state !== undefined && { state }),
-        ...(zipcode !== undefined && { zipcode }),
-        ...(estValue !== undefined && {
-          estValue: estValue ? Number(estValue) : null,
+        ...(updateLeadDto.propertyType !== undefined && {
+          propertyType: updateLeadDto.propertyType,
         }),
-        ...(estEquity !== undefined && {
-          estEquity: estEquity ? Number(estEquity) : null,
+        ...(updateLeadDto.propertyAddress !== undefined && {
+          propertyAddress: updateLeadDto.propertyAddress,
         }),
-        ...(firstName !== undefined && { firstName }),
-        ...(lastName !== undefined && { lastName }),
-        ...(phoneNumbers !== undefined && { phoneNumbers }),
-        ...(emailAddresses !== undefined && { emailAddresses }),
+        ...(updateLeadDto.unitNumber !== undefined && {
+          unitNumber: updateLeadDto.unitNumber,
+        }),
+        ...(updateLeadDto.city !== undefined && { city: updateLeadDto.city }),
+        ...(updateLeadDto.state !== undefined && { state: updateLeadDto.state }),
+        ...(updateLeadDto.zipcode !== undefined && {
+          zipcode: updateLeadDto.zipcode,
+        }),
+        ...(updateLeadDto.county !== undefined && {
+          county: updateLeadDto.county,
+        }),
+        ...(updateLeadDto.estValue !== undefined && {
+          estValue: updateLeadDto.estValue
+            ? Number(updateLeadDto.estValue)
+            : null,
+        }),
+        ...(updateLeadDto.estEquity !== undefined && {
+          estEquity: updateLeadDto.estEquity
+            ? Number(updateLeadDto.estEquity)
+            : null,
+        }),
+        ...(updateLeadDto.firstName !== undefined && {
+          firstName: updateLeadDto.firstName,
+        }),
+        ...(updateLeadDto.lastName !== undefined && {
+          lastName: updateLeadDto.lastName,
+        }),
+        ...(updateLeadDto.phoneNumbers !== undefined && {
+          phoneNumbers: updateLeadDto.phoneNumbers,
+        }),
+        ...(updateLeadDto.emailAddresses !== undefined && {
+          emailAddresses: updateLeadDto.emailAddresses,
+        }),
       },
       include: {
         category: true,
@@ -316,22 +350,30 @@ export class LeadService {
     return updated;
   }
 
+  // 5. লিড ডিলিট (কেনা থাকলে ARCHIVED, না থাকলে ডিলিট)
   async deleteLead(id: string) {
     const existing = await this.prisma.lead.findUnique({
       where: { id },
+      include: { userLead: true },
     });
 
     if (!existing) {
-      throw new NotFoundException(`Lead with ID '${id}' not found`);
+      throw new NotFoundException('Lead not found');
     }
 
-    const deleted = await this.prisma.lead.delete({
+    if (existing.userLead && existing.userLead.length > 0) {
+      return await this.prisma.lead.update({
+        where: { id },
+        data: { status: 'ARCHIVED' },
+      });
+    }
+
+    return await this.prisma.lead.delete({
       where: { id },
     });
-
-    return deleted;
   }
 
+  // 6. বাল্ক আপলোড
   async bulkUploadLeads(
     file: Express.Multer.File,
     adminId: string,
@@ -346,7 +388,6 @@ export class LeadService {
       throw new BadRequestException('The uploaded file contains no data rows');
     }
 
-    // Cache categories so we can resolve by ID or Name
     const allCategories = await this.prisma.catagorie.findMany({
       select: { id: true, name: true },
     });
@@ -362,15 +403,13 @@ export class LeadService {
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const rowNum = i + 2; // spreadsheet 1-indexed header is row 1
+      const rowNum = i + 2;
 
-      // 1. Resolve category
       let categoryId =
         this.getFieldValue(row, ['categoryid', 'category_id', 'category']) ||
         defaultCategoryId;
 
       if (categoryId && !categoryIdSet.has(categoryId)) {
-        // Try matching by category name
         const matched = categoryMapByName.get(categoryId.trim().toLowerCase());
         if (matched) {
           categoryId = matched;
@@ -385,7 +424,6 @@ export class LeadService {
         continue;
       }
 
-      // 2. Parse sale date
       const rawSaleDate = this.getFieldValue(row, [
         'saledate',
         'sale_date',
@@ -401,7 +439,6 @@ export class LeadService {
         }
       }
 
-      // 3. String & Numeric fields
       const stage = this.getFieldValue(row, [
         'stage',
         'foreclosurestage',
@@ -476,7 +513,6 @@ export class LeadService {
         'imageurl',
       ]);
 
-      // 4. Arrays: phone numbers and emails
       const rawPhones = this.getFieldValue(row, [
         'phonenumbers',
         'phone_numbers',
@@ -528,7 +564,6 @@ export class LeadService {
       });
     }
 
-    // Insert leads
     const createdCount = await this.prisma.lead.createMany({
       data: leadsToCreate,
     });
@@ -537,19 +572,13 @@ export class LeadService {
       totalRows: rows.length,
       importedCount: createdCount.count,
       failedCount: errors.length,
-      errors: errors.slice(0, 50), // Show up to first 50 errors
+      errors: errors.slice(0, 50),
     };
   }
 
   private parseSpreadsheetFile(
     file: Express.Multer.File,
   ): Record<string, any>[] {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const isCsv =
-      file.mimetype === 'text/csv' ||
-      file.originalname.toLowerCase().endsWith('.csv');
-
-    // XLSX library supports CSV, XLSX, XLS directly from buffer
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const xlsx = require('xlsx');
     const workbook = xlsx.read(file.buffer, { type: 'buffer' });
@@ -561,7 +590,6 @@ export class LeadService {
       defval: '',
     }) as Record<string, any>[];
 
-    // Normalize keys to lowercase stripped of spaces/underscores for flexible matching
     return rawRows.map((row) => {
       const normalizedRow: Record<string, any> = {};
       for (const [key, val] of Object.entries(row)) {

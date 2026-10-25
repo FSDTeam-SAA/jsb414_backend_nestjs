@@ -38,7 +38,7 @@ export class CategoriesController {
   })
   @ApiConsumes('multipart/form-data')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'))
   @UseInterceptors(FileInterceptor('logo', fileUpload.uploadConfig))
   @HttpCode(HttpStatus.CREATED)
   async createCategory(
@@ -124,7 +124,7 @@ export class CategoriesController {
   })
   @ApiConsumes('multipart/form-data')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'))
   @UseInterceptors(FileInterceptor('logo', fileUpload.uploadConfig))
   @HttpCode(HttpStatus.OK)
   async updateCategory(
@@ -148,7 +148,7 @@ export class CategoriesController {
     summary: 'Delete category',
   })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'))
   @HttpCode(HttpStatus.OK)
   async deleteCategory(@Param('id') id: string) {
     const result = await this.categoriesService.deleteCategorie(id);

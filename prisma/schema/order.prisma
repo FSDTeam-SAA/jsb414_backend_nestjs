@@ -1,0 +1,42 @@
+model Order {
+  id          String @id @default(uuid())
+  orderNumber String @unique // ফিগমার মতো ডিসপ্লে আইডি (যেমন: FG-ORD-10001)
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  subtotalCents    Int // মূল দামের যোগফল
+  discountCents    Int @default(0) // মেম্বারশিপে কত সেন্ট ছাড় পেল
+  totalAmountCents Int // ছাড়ের পর সর্বমোট সেন্টস
+
+  walletUsedCents Int @default(0) // অ্যাকাউন্ট ব্যালেন্স থেকে কত দেওয়া হলো
+  cardPaidCents   Int @default(0) // কার্ড (Stripe) থেকে কত দেওয়া হলো
+
+  status          PaymentStatus @default(COMPLETED)
+  stripePaymentId String? // কার্ড পেমেন্টের ট্রানজেকশন আইডি
+  receiptUrl      String? // ইনভয়েস লিংক
+
+  orderItems OrderItem[]
+  userLeads  UserLead[] // এই অর্ডারে কেনা স্থায়ী লিডগুলোর রিলেশন
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id      String @id @default(uuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  leadId  String
+  lead    Lead   @relation(fields: [leadId], references: [id], onDelete: Restrict)
+
+  priceType          LeadAvailability // SHARED নাকি EXCLUSIVE
+  originalPriceCents Int // ছাড়ের আগের দাম
+  discountCents      Int              @default(0) // ছাড়ের পরিমাণ
+  pricePaidCents     Int // ছাড়ের পর এই নির্দিষ্ট লিডের চূড়ান্ত দাম
+
+  createdAt DateTime @default(now())
+
+  @@map("order_items")
+}

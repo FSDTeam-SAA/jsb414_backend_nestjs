@@ -36,6 +36,7 @@ model Lead {
   admin                   User             @relation(fields: [adminId], references: [id])
   cartItems               CartItem[]
   userLead                UserLead[]
+  orderItems              OrderItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

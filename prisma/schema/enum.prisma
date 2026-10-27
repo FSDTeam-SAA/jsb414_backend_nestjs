@@ -54,3 +54,10 @@ enum PriceType {
     SHARED
     EXCLUSIVE
 }
+
+enum WalletTransactionType {
+    TOP_UP // কাস্টমার নিজে ফান্ড অ্যাড করেছে ($100, $250 ইত্যাদি)
+    PURCHASE // লিড কেনার জন্য ব্যালেন্স থেকে কাটা হয়েছে
+    REFUND // ব্যাড লিডের টাকা রিফান্ড পেয়ে ওয়ালেটে যোগ হয়েছে
+    ADMIN_ADJUSTMENT // অ্যাডমিন কোনো বোনাস বা ব্যালেন্স অ্যাডজাস্ট করেছে
+}

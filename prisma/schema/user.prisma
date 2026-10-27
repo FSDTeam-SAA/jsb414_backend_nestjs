@@ -14,15 +14,16 @@ model User {
     otpExpiry      DateTime?
     verifiedForget Boolean?
 
-    createdPlans   Subscribe[]     @relation("SubscribeCreatedBy")
-    updatedPlans   Subscribe[]     @relation("SubscribeUpdatedBy")
-    userSubscribes UserSubscribe[]
-    payments       Payment[]
-    lead           Lead[]
-    cartItems      CartItem[]
-    userLead       UserLead[]
-    savedSearches  SavedSearch[]
-    orders         Order[]
+    createdPlans       Subscribe[]         @relation("SubscribeCreatedBy")
+    updatedPlans       Subscribe[]         @relation("SubscribeUpdatedBy")
+    userSubscribes     UserSubscribe[]
+    payments           Payment[]
+    lead               Lead[]
+    cartItems          CartItem[]
+    userLead           UserLead[]
+    savedSearches      SavedSearch[]
+    orders             Order[]
+    walletTransactions WalletTransaction[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

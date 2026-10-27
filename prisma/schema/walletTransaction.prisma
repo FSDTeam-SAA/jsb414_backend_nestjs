@@ -1,0 +1,16 @@
+model WalletTransaction {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amountCents  Int
+  balanceAfter Int
+  type         WalletTransactionType
+  description  String?
+  referenceId  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("wallet_transactions")
+}

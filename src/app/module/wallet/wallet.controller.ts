@@ -42,7 +42,7 @@ export class WalletController {
   @HttpCode(HttpStatus.CREATED)
   async addFunds(@Req() req: Request, @Body() dto: CreateWalletDto) {
     const userId = req.user!.id;
-    const result = await this.walletService.addFound(userId, dto);
+    const result = await this.walletService.addFunds(userId, dto);
     return {
       message: 'Funds added successfully',
       data: result,

@@ -1,15 +1,15 @@
 model WalletTransaction {
-  id     String @id @default(uuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String                @id @default(uuid())
+  userId       String
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  amountCents  Int
-  balanceAfter Int
-  type         WalletTransactionType
-  description  String?
-  referenceId  String?
+  amountCents  Int                   // কত সেন্ট লেনদেন হলো (যেমন: 10000 = $100)
+  balanceAfter Int                   // এই লেনদেনের পর বর্তমান ব্যালেন্স কত হলো
+  type         WalletTransactionType // TOP_UP, PURCHASE, REFUND, ADMIN_ADJUSTMENT
+  description  String?               // বিবরণ (যেমন: "Added funds: $100.00")
+  referenceId  String?               // অর্ডার আইডি, পেমেন্ট আইডি বা অ্যাডমিন আইডি
 
-  createdAt DateTime @default(now())
+  createdAt    DateTime              @default(now())
 
   @@index([userId])
   @@map("wallet_transactions")

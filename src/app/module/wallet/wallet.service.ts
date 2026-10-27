@@ -22,16 +22,16 @@ export class WalletService {
       },
     });
     if (!user) {
-      throw new Error('User not found');
+      throw new NotFoundException('User not found');
     }
-    const balanceCebt = user.walletBalanceCents ?? 0;
+    const balanceCents = user.walletBalanceCents ?? 0;
     return {
-      walletBalanceCents: balanceCebt,
-      formattedBalance: `$${(balanceCebt / 100).toFixed(2)}`,
+      walletBalanceCents: balanceCents,
+      formattedBalance: `$${(balanceCents / 100).toFixed(2)}`,
     };
   }
 
-  async addFound(userId: string, dto: CreateWalletDto) {
+  async addFunds(userId: string, dto: CreateWalletDto) {
     const result = await this.prisma.$transaction(async (tx) => {
       const updatedUser = await tx.user.update({
         where: { id: userId },
@@ -41,17 +41,8 @@ export class WalletService {
         select: { walletBalanceCents: true },
       });
 
-      const transaction = await tx.walletTransaction.create({
-        data: {
-          userId,
-          amountCents: dto.amountCents,
-          balanceAfter: updatedUser.walletBalanceCents,
-          type: 'TOP_UP',
-          description: `Added funds: $${(dto.amountCents / 100).toFixed(2)}`,
-        },
-      });
       // পেমেন্ট হিস্ট্রি রেকর্ড
-      await tx.payment.create({
+      const payment = await tx.payment.create({
         data: {
           userId,
           amount: dto.amountCents / 100,
@@ -60,6 +51,18 @@ export class WalletService {
           status: 'COMPLETED',
         },
       });
+
+      const transaction = await tx.walletTransaction.create({
+        data: {
+          userId,
+          amountCents: dto.amountCents,
+          balanceAfter: updatedUser.walletBalanceCents,
+          type: 'TOP_UP',
+          description: `Added funds: $${(dto.amountCents / 100).toFixed(2)}`,
+          referenceId: payment.id,
+        },
+      });
+
       return {
         transactionId: transaction.id,
         amountAddedCents: dto.amountCents,
@@ -75,7 +78,7 @@ export class WalletService {
     const { limit, page, skip, sortBy, sortOrder } = paginationHelper(options);
 
     const [result, total] = await Promise.all([
-      await this.prisma.walletTransaction.findMany({
+      this.prisma.walletTransaction.findMany({
         where: {
           userId: userId,
         },

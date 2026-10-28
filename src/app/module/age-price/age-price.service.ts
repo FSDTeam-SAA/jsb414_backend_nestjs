@@ -13,7 +13,7 @@ import { UpdateAgePriceDto } from './dto/update-age-price.dto';
 export class AgePriceService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // 👇 ১. ওভারল্যাপ চেক করার প্রাইভেট হেল্পার
+
   private async checkOverlap(
     categoryId: string,
     priceType: PriceType,
@@ -26,7 +26,7 @@ export class AgePriceService {
         'maxDays must be greater than or equal to minDays',
       );
     }
-    // ঐ ক্যাটাগরি ও টাইপের বিদ্যমান সব রুল আনা
+
     const existingRules = await this.prisma.agePriceRule.findMany({
       where: {
         categoryId,
@@ -37,18 +37,17 @@ export class AgePriceService {
     for (const rule of existingRules) {
       const existingMin = rule.minDays;
       const existingMax = rule.maxDays;
-      // রেঞ্জ ওভারল্যাপের গাণিতিক শর্ত
+
       // eslint-disable-next-line no-useless-assignment
       let isOverlapping = false;
       if (maxDays === null || maxDays === undefined) {
         // নতুন রুলের কোনো ঊর্ধ্বসীমা নেই (e.g. 91+)
         if (existingMax === null) {
-          isOverlapping = true; // দুটোই আনলিমিটেড
+          isOverlapping = true; 
         } else {
           isOverlapping = existingMax >= minDays;
         }
       } else {
-        // নতুন রুলের নির্দিষ্ট ঊর্ধ্বসীমা আছে
         if (existingMax === null) {
           isOverlapping = maxDays >= existingMin;
         } else {

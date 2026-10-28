@@ -2,7 +2,7 @@ model Subscribe {
   id       String  @id @default(uuid())
   title    String
   subTitle String
-  price    Int
+  price    Decimal @db.Decimal(14, 2)
   discount Int     @default(0)
   currency String  @default("USD")
   isActive Boolean @default(true)

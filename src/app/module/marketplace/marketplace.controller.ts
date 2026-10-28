@@ -5,13 +5,22 @@ import {
   HttpStatus,
   Param,
   Req,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Request } from 'express';
 import pick from 'src/app/helper/pick';
 import { MarketplaceService } from './marketplace.service';
+import { AuthGuard } from '../../middlewares/auth.guard';
 
 @ApiTags('Customer Marketplace')
+@ApiBearerAuth('access-token')
+@UseGuards(AuthGuard())
 @Controller('marketplace')
 export class MarketplaceController {
   constructor(private readonly marketplaceService: MarketplaceService) {}
@@ -51,6 +60,7 @@ export class MarketplaceController {
     const result = await this.marketplaceService.getAllMarketPlace(
       filters,
       options,
+      req.user!.id,
     );
 
     return {
@@ -65,8 +75,11 @@ export class MarketplaceController {
     summary: 'Get single lead preview for drawer (pre-purchase masked view)',
   })
   @HttpCode(HttpStatus.OK)
-  async getSingleMarketplaceLead(@Param('id') id: string) {
-    const result = await this.marketplaceService.getSingleMarketplaceLead(id);
+  async getSingleMarketplaceLead(@Param('id') id: string, @Req() req: Request) {
+    const result = await this.marketplaceService.getSingleMarketplaceLead(
+      id,
+      req.user!.id,
+    );
 
     return {
       message: 'Marketplace lead preview fetched successfully',

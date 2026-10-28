@@ -4,13 +4,22 @@ import buildWhereConditions from 'src/app/helper/buildWhereConditions';
 import paginationHelper, { IOptions } from 'src/app/helper/pagenation';
 import { IFilterParams } from 'src/app/helper/pick';
 import { PrismaService } from 'src/prisma/prisma.service';
+import {
+  calculateDynamicLeadPrice,
+  inventoryAge,
+} from '../../helper/pricing.helper';
 
 @Injectable()
 export class MarketplaceService {
   constructor(private readonly prisma: PrismaService) {}
 
   // 1. মার্কেটপ্লেসের সকল লিড লিস্ট (কেনার পূর্বে সেনসিটিভ ডেটা ছাড়া)
-  async getAllMarketPlace(params: IFilterParams, options: IOptions) {
+  async getAllMarketPlace(
+    params: IFilterParams,
+    options: IOptions,
+    userId?: string,
+  ) {
+    const discountPercent = await this.discountFor(userId);
     const { limit, page, skip, sortBy, sortOrder } = paginationHelper(options);
 
     const searchableFields = [
@@ -24,6 +33,9 @@ export class MarketplaceService {
 
     const whereConditions = buildWhereConditions(params, searchableFields, {
       status: 'ACTIVE',
+      classification: 'SELLABLE',
+      category: { isActive: true },
+      exclusiveSoldAt: null,
     });
 
     const [data, total] = await Promise.all([
@@ -46,15 +58,15 @@ export class MarketplaceService {
           availability: true,
           sharedLimit: true,
           sharedSalesCount: true,
-          sharedBasePriceCents: true,
-          exclusiveBasePriceCents: true,
           createdAt: true,
           category: {
             select: {
               id: true,
               name: true,
-              sharedBasePriceCents: true,
-              exclusiveBasePriceCents: true,
+              sharedBasePrice: true,
+              exclusiveBasePrice: true,
+              agePricingEnabled: true,
+              agePriceRules: true,
             },
           },
         },
@@ -76,16 +88,45 @@ export class MarketplaceService {
         total,
         totalPage: Math.ceil(total / limit),
       },
-      data,
+      data: data.map((lead) => this.withPrices(lead, discountPercent)),
     };
   }
 
   // 2. ড্রয়ার প্রিভিউ-এর জন্য সিঙ্গেল লিড প্রিভিউ (মাস্কড ডেটা সহ)
-  async getSingleMarketplaceLead(id: string) {
+  private withPrices(lead: any, discountPercent = 0) {
+    const prices = calculateDynamicLeadPrice({
+      categorySharedBasePrice: lead.category.sharedBasePrice,
+      categoryExclusiveBasePrice: lead.category.exclusiveBasePrice,
+      agePricingEnabled: lead.category.agePricingEnabled,
+      agePriceRules: lead.category.agePriceRules,
+      ageInDays: inventoryAge(lead.createdAt),
+      userDiscountPercent: discountPercent,
+    });
+    const { sharedLimit: _limit, sharedSalesCount: _count, ...safe } = lead;
+    return {
+      ...safe,
+      category: { id: lead.category.id, name: lead.category.name },
+      sharedPrice:
+        lead.availability === 'EXCLUSIVE' ||
+        (lead.sharedLimit !== null && lead.sharedSalesCount >= lead.sharedLimit)
+          ? null
+          : prices.finalShared,
+      exclusivePrice:
+        lead.availability === 'SHARED' ? null : prices.finalExclusive,
+      currency: 'USD',
+      appliedDiscountPercent: discountPercent,
+    };
+  }
+
+  async getSingleMarketplaceLead(id: string, userId?: string) {
+    const discountPercent = await this.discountFor(userId);
     const lead = await this.prisma.lead.findFirst({
       where: {
         id,
         status: 'ACTIVE',
+        classification: 'SELLABLE',
+        category: { isActive: true },
+        exclusiveSoldAt: null,
       },
       select: {
         id: true,
@@ -108,15 +149,15 @@ export class MarketplaceService {
         availability: true,
         sharedLimit: true,
         sharedSalesCount: true,
-        sharedBasePriceCents: true,
-        exclusiveBasePriceCents: true,
         createdAt: true,
         category: {
           select: {
             id: true,
             name: true,
-            sharedBasePriceCents: true,
-            exclusiveBasePriceCents: true,
+            sharedBasePrice: true,
+            exclusiveBasePrice: true,
+            agePricingEnabled: true,
+            agePriceRules: true,
           },
         },
       },
@@ -134,7 +175,9 @@ export class MarketplaceService {
     // ফোন নম্বর মাস্কিং: "(***) ***-4521"
     const maskedPhones = (lead.phoneNumbers || []).map((phone) => {
       const digits = phone.replace(/\D/g, '');
-      return digits.length >= 4 ? `(***) ***-${digits.slice(-4)}` : '(***) ***-••••';
+      return digits.length >= 4
+        ? `(***) ***-${digits.slice(-4)}`
+        : '(***) ***-••••';
     });
 
     // ইমেইল মাস্কিং: "j••••@gmail.com"
@@ -145,14 +188,31 @@ export class MarketplaceService {
     });
 
     // আসল নাম, ফোন ও ইমেইল বাদ দিয়ে মাস্কড অবজেক্ট রিটার্ন
-    const { firstName, lastName, phoneNumbers, emailAddresses, ...safeLead } = lead;
+    const { firstName, lastName, phoneNumbers, emailAddresses, ...safeLead } =
+      lead;
 
     return {
-      ...safeLead,
+      ...this.withPrices(safeLead, discountPercent),
       ownerName: maskedOwner,
       streetAddress: 'Hidden Until Purchase',
       maskedPhones,
       maskedEmails,
     };
+  }
+
+  private async discountFor(userId?: string) {
+    if (!userId) return 0;
+    const now = new Date();
+    const membership = await this.prisma.userSubscribe.findFirst({
+      where: {
+        userId,
+        status: { in: ['ACTIVE', 'CANCELLED'] },
+        startDate: { lte: now },
+        endDate: { gt: now },
+      },
+      orderBy: { endDate: 'desc' },
+      include: { subscribe: true },
+    });
+    return membership?.subscribe.discount ?? 0;
   }
 }

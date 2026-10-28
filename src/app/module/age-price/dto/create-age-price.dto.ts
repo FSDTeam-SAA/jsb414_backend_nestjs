@@ -1,6 +1,14 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsEnum, IsInt, IsUUID, Max, Min, ValidateIf } from "class-validator";
-import { PriceType } from "../../../../../prisma/generated/prisma/enums";
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsEnum,
+  IsInt,
+  IsNumber,
+  IsUUID,
+  Max,
+  Min,
+  ValidateIf,
+} from 'class-validator';
+import { PriceType } from '../../../../../prisma/generated/prisma/enums';
 
 export class CreateAgePriceDto {
   @ApiProperty({
@@ -35,11 +43,11 @@ export class CreateAgePriceDto {
   maxDays?: number | null;
 
   @ApiProperty({
-    example: 2000,
-    description: 'Price in cents: 2000 = $20',
+    example: 20,
+    description: 'Price in USD dollars: 20 means $20',
   })
-  @IsInt()
+  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
   @Min(0)
-  @Max(2147483647)
-  priceCents!: number;
+  @Max(1000000)
+  price!: number;
 }

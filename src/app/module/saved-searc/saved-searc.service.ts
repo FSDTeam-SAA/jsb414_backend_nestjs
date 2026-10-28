@@ -94,7 +94,11 @@ export class SavedSearcService {
 
     // সেভ করা ফিল্টারটি নিয়ে সরাসরি MarketplaceService এর getAllMarketPlace ফাংশন কল করা
     const filters = savedSearch.filters as IFilterParams;
-    return await this.marketplaceService.getAllMarketPlace(filters, options);
+    return await this.marketplaceService.getAllMarketPlace(
+      filters,
+      options,
+      userId,
+    );
   }
 
   // ৪. সেভড সার্চ ডিলিট করা

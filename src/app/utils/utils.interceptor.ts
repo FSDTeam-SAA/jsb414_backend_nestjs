@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { catchError, map, Observable, throwError } from 'rxjs';
+import { moneyResponse } from '../helper/money-response';
 
 @Injectable()
 export class UtilsInterceptor implements NestInterceptor {
@@ -23,7 +24,7 @@ export class UtilsInterceptor implements NestInterceptor {
             success: res.statusCode >= 200 && res.statusCode < 300,
             message: response.message || null,
             meta: response.meta,
-            data: response.data,
+            data: moneyResponse(response.data),
           };
         }
 
@@ -31,7 +32,7 @@ export class UtilsInterceptor implements NestInterceptor {
           statusCode: res.statusCode,
           success: res.statusCode >= 200 && res.statusCode < 300,
           message: 'Request successfully completed',
-          data: response,
+          data: moneyResponse(response),
         };
       }),
       catchError((error) => throwError(() => error)),

@@ -5,6 +5,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { Prisma } from '../../../../prisma/generated/prisma/client';
+import {
+  calculateDynamicLeadPrice,
+  inventoryAge,
+} from '../../helper/pricing.helper';
 import { AddToCartDto } from './dto/add-to-cart.dto';
 import { BulkAddToCartDto } from './dto/bulk-add-to-cart.dto';
 
@@ -18,13 +23,14 @@ export class CardService {
         id: addToCartDto.leadId,
       },
       include: {
-        category: true,
+        category: { include: { agePriceRules: true } },
       },
     });
     if (
       !lead ||
       lead.status !== 'ACTIVE' ||
-      lead.classification !== 'SELLABLE'
+      lead.classification !== 'SELLABLE' ||
+      !lead.category.isActive
     ) {
       throw new NotFoundException(
         'Lead not found or is currently not available for purchase',
@@ -65,6 +71,17 @@ export class CardService {
       }
     }
 
+    const selectedPrices = this.leadPrices(lead, 0);
+    const selectedPrice =
+      addToCartDto.priceType === 'EXCLUSIVE'
+        ? selectedPrices.finalExclusive
+        : selectedPrices.finalShared;
+    if (selectedPrice === null) {
+      throw new BadRequestException(
+        'Category price is not configured for this purchase type',
+      );
+    }
+
     const cartItem = await this.prisma.cartItem.upsert({
       where: {
         userId_leadId: {
@@ -91,43 +108,23 @@ export class CardService {
             zipcode: true,
             propertyType: true,
             stage: true,
-            sharedBasePriceCents: true,
-            exclusiveBasePriceCents: true,
-            category: {
-              select: {
-                id: true,
-                name: true,
-                sharedBasePriceCents: true,
-                exclusiveBasePriceCents: true,
-              },
-            },
+            category: { select: { id: true, name: true } },
           },
         },
       },
     });
 
-    // Cart responses use dollars; category/lead inventory storage still uses cents.
-    const { lead: cartLead, ...item } = cartItem;
-    const sharedPrice =
-      cartLead.sharedBasePriceCents ?? cartLead.category.sharedBasePriceCents;
-    const exclusivePrice =
-      cartLead.exclusiveBasePriceCents ??
-      cartLead.category.exclusiveBasePriceCents;
+    const membership = await this.currentMembership(userId);
+    const prices = this.leadPrices(lead, membership?.subscribe.discount ?? 0);
     return {
-      ...item,
+      ...cartItem,
       lead: {
-        id: cartLead.id,
-        leadNumber: cartLead.leadNumber,
-        city: cartLead.city,
-        state: cartLead.state,
-        county: cartLead.county,
-        zipcode: cartLead.zipcode,
-        propertyType: cartLead.propertyType,
-        stage: cartLead.stage,
-        sharedPrice: sharedPrice === null ? null : sharedPrice / 100,
-        exclusivePrice: exclusivePrice === null ? null : exclusivePrice / 100,
+        ...cartItem.lead,
+        sharedPrice:
+          lead.availability === 'EXCLUSIVE' ? null : prices.finalShared,
+        exclusivePrice:
+          lead.availability === 'SHARED' ? null : prices.finalExclusive,
         currency: 'USD',
-        category: { id: cartLead.category.id, name: cartLead.category.name },
       },
     };
   }
@@ -232,117 +229,105 @@ export class CardService {
       where: { id: userId },
       select: { walletBalance: true },
     });
-
-    // ৩.২ কাস্টমারের কোনো অ্যাক্টিভ মেম্বারশিপ টায়ার ও ডিসকাউন্ট আছে কিনা চেক
-    const activeSub = await this.prisma.userSubscribe.findFirst({
-      where: {
-        userId,
-        status: 'ACTIVE',
-      },
-      include: {
-        subscribe: true,
-      },
-    });
-
-    const discountPercent = activeSub?.subscribe?.discount ?? 0;
-
-    // ৩.৩ কার্টের আইটেমগুলো আনা
+    if (!user) throw new NotFoundException('User not found');
+    const membership = await this.currentMembership(userId);
+    const discountPercent = membership?.subscribe.discount ?? 0;
     const cartItems = await this.prisma.cartItem.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       include: {
-        lead: {
-          select: {
-            id: true,
-            leadNumber: true,
-            city: true,
-            state: true,
-            county: true,
-            zipcode: true,
-            propertyType: true,
-            stage: true,
-            availability: true,
-            sharedBasePriceCents: true,
-            exclusiveBasePriceCents: true,
-            category: {
-              select: {
-                id: true,
-                name: true,
-                sharedBasePriceCents: true,
-                exclusiveBasePriceCents: true,
-              },
-            },
-          },
-        },
+        lead: { include: { category: { include: { agePriceRules: true } } } },
       },
     });
-
-    // ৩.৪ প্রতিটি আইটেমের জন্য লাইভ প্রাইস ও ডিসকাউন্ট হিসাব
-    let subtotalCents = 0;
-    let totalDiscountCents = 0;
-
+    let subtotal = new Prisma.Decimal(0);
+    let discount = new Prisma.Decimal(0);
     const items = cartItems.map((item) => {
       const lead = item.lead;
-      const isExclusive = item.priceType === 'EXCLUSIVE';
-
-      // বেস প্রাইস: লিডের নিজস্ব প্রাইস থাকলে সেটা, নয়তো ক্যাটাগরির প্রাইস
-      const basePrice = isExclusive
-        ? (lead.exclusiveBasePriceCents ??
-          lead.category?.exclusiveBasePriceCents ??
-          5000)
-        : (lead.sharedBasePriceCents ??
-          lead.category?.sharedBasePriceCents ??
-          2000);
-
-      const discountCents = Math.round((basePrice * discountPercent) / 100);
-      const finalPrice = Math.max(0, basePrice - discountCents);
-
-      subtotalCents += basePrice;
-      totalDiscountCents += discountCents;
-
-      // মাস্কড জিপ কোড (যেমন: 928XX)
-      const maskedZip =
-        lead.zipcode && lead.zipcode.length >= 3
-          ? `${lead.zipcode.slice(0, 3)}XX`
-          : '••••';
-
+      const prices = this.leadPrices(lead, discountPercent);
+      const exclusive = item.priceType === 'EXCLUSIVE';
+      const original = exclusive
+        ? prices.originalExclusive
+        : prices.originalShared;
+      const final = exclusive ? prices.finalExclusive : prices.finalShared;
+      const saving = exclusive
+        ? prices.exclusiveDiscount
+        : prices.sharedDiscount;
+      const modeAvailable = exclusive
+        ? lead.availability !== 'SHARED'
+        : lead.availability !== 'EXCLUSIVE' &&
+          (lead.sharedLimit === null ||
+            lead.sharedSalesCount < lead.sharedLimit);
+      const available =
+        lead.status === 'ACTIVE' &&
+        lead.classification === 'SELLABLE' &&
+        lead.category.isActive &&
+        lead.exclusiveSoldAt === null &&
+        modeAvailable &&
+        final !== null;
+      if (available && original !== null) {
+        subtotal = subtotal.plus(original);
+        discount = discount.plus(saving);
+      }
       return {
         cartItemId: item.id,
         leadId: lead.id,
         leadNumber: lead.leadNumber,
-        location: `${lead.city || ''}, ${lead.state || ''} ${maskedZip}`.trim(),
+        location:
+          `${lead.city ?? ''}, ${lead.state ?? ''} ${lead.zipcode?.slice(0, 3) ?? ''}XX`.trim(),
         propertyType: lead.propertyType,
         stage: lead.stage,
-        categoryName: lead.category?.name,
+        categoryName: lead.category.name,
         priceType: item.priceType,
-        originalPrice: basePrice / 100,
-        discount: discountCents / 100,
-        finalPrice: finalPrice / 100,
+        originalPrice: original,
+        discount: saving,
+        finalPrice: final,
+        available,
+        currency: 'USD',
         addedAt: item.createdAt,
       };
     });
-
-    const totalCents = Math.max(0, subtotalCents - totalDiscountCents);
-
     return {
       summary: {
         totalItems: items.length,
-        subtotal: subtotalCents / 100,
-        discount: totalDiscountCents / 100,
-        total: totalCents / 100,
-        walletBalance: user?.walletBalance.toNumber() ?? 0,
+        unavailableItems: items.filter((item) => !item.available).length,
+        subtotal,
+        discount,
+        total: subtotal.minus(discount),
+        walletBalance: user.walletBalance,
         currency: 'USD',
         appliedDiscountPercent: discountPercent,
-        hasActiveSubscription: Boolean(activeSub),
-        subscriptionName: activeSub?.subscribe?.title || null,
+        hasActiveSubscription: Boolean(membership),
+        subscriptionName: membership?.subscribe.title ?? null,
       },
       items,
     };
   }
 
-  // =========================================================================
-  // ৪. কার্ট থেকে নির্দিষ্ট একটি আইটেম রিমুভ করা
-  // =========================================================================
+  private currentMembership(userId: string) {
+    const now = new Date();
+    return this.prisma.userSubscribe.findFirst({
+      where: {
+        userId,
+        status: { in: ['ACTIVE', 'CANCELLED'] },
+        startDate: { lte: now },
+        endDate: { gt: now },
+      },
+      orderBy: { endDate: 'desc' },
+      include: { subscribe: true },
+    });
+  }
+
+  private leadPrices(lead: any, discountPercent: number) {
+    return calculateDynamicLeadPrice({
+      categorySharedBasePrice: lead.category.sharedBasePrice,
+      categoryExclusiveBasePrice: lead.category.exclusiveBasePrice,
+      agePricingEnabled: lead.category.agePricingEnabled,
+      agePriceRules: lead.category.agePriceRules,
+      ageInDays: inventoryAge(lead.createdAt),
+      userDiscountPercent: discountPercent,
+    });
+  }
+
   async removeFromCart(userId: string, cartItemId: string) {
     const existing = await this.prisma.cartItem.findFirst({
       where: {

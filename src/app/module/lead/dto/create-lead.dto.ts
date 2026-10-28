@@ -60,7 +60,8 @@ export class CreateLeadDto {
 
   @ApiPropertyOptional({
     example: 'Conventional',
-    description: 'Mortgage information (e.g. Conventional, FHA, balance details)',
+    description:
+      'Mortgage information (e.g. Conventional, FHA, balance details)',
   })
   @IsOptional()
   @IsString()
@@ -98,16 +99,6 @@ export class CreateLeadDto {
   sharedLimit?: number;
 
   @ApiPropertyOptional({
-    description:
-      'Optional manual price override in cents (e.g., 2500 for $25). If empty, category default price will be used automatically.',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt({ message: 'priceCents must be an integer' })
-  @Min(0)
-  priceCents?: number;
-
-  @ApiPropertyOptional({
     enum: LeadStatus,
     example: LeadStatus.ACTIVE,
     description: 'Status of the lead (ACTIVE, INACTIVE, ARCHIVED)',
@@ -128,7 +119,8 @@ export class CreateLeadDto {
 
   @ApiPropertyOptional({
     example: 'Single Family',
-    description: 'Property type (Single Family, Multi Family, Commercial, etc.)',
+    description:
+      'Property type (Single Family, Multi Family, Commercial, etc.)',
   })
   @IsOptional()
   @IsString()
@@ -142,7 +134,10 @@ export class CreateLeadDto {
   @IsString()
   propertyAddress?: string;
 
-  @ApiPropertyOptional({ example: 'Apt 14B', description: 'Unit or apartment number' })
+  @ApiPropertyOptional({
+    example: 'Apt 14B',
+    description: 'Unit or apartment number',
+  })
   @IsOptional()
   @IsString()
   unitNumber?: string;
@@ -162,7 +157,10 @@ export class CreateLeadDto {
   @IsString()
   zipcode?: string;
 
-  @ApiPropertyOptional({ example: 'Miami-Dade County', description: 'County name' })
+  @ApiPropertyOptional({
+    example: 'Miami-Dade County',
+    description: 'County name',
+  })
   @IsOptional()
   @IsString()
   county?: string;

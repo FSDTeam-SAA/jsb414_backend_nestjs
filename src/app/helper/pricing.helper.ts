@@ -1,82 +1,87 @@
+import { ConflictException } from '@nestjs/common';
+import { Prisma } from '../../../prisma/generated/prisma/client';
+
+type DollarValue = number | string | Prisma.Decimal;
+
 export interface IPriceCalculationParams {
-  leadSharedPriceCents?: number | null;
-  leadExclusivePriceCents?: number | null;
-  categorySharedBasePriceCents: number;
-  categoryExclusiveBasePriceCents: number;
+  categorySharedBasePrice: DollarValue | null;
+  categoryExclusiveBasePrice: DollarValue | null;
   agePricingEnabled: boolean;
   ageInDays: number;
   agePriceRules?: Array<{
     priceType: 'SHARED' | 'EXCLUSIVE';
-    priceCents: number;
+    price: DollarValue;
     minDays: number;
     maxDays?: number | null;
   }>;
-  userDiscountPercent?: number; // কাস্টমারের মেম্বারশিপ টায়ার ডিসকাউন্ট (যেমন: 10, 20)
+  userDiscountPercent?: number;
 }
 
-export const calculateDynamicLeadPrice = (params: IPriceCalculationParams) => {
-  const {
-    leadSharedPriceCents,
-    leadExclusivePriceCents,
-    categorySharedBasePriceCents,
-    categoryExclusiveBasePriceCents,
-    agePricingEnabled,
-    ageInDays,
-    agePriceRules = [],
-    userDiscountPercent = 0,
-  } = params;
-
-  // ১. SHARED প্রাইস বের করা
-  let sharedBase = categorySharedBasePriceCents;
-  if (agePricingEnabled) {
-    const matchedAgeRule = agePriceRules.find(
-      (r) =>
-        r.priceType === 'SHARED' &&
-        r.minDays <= ageInDays &&
-        (r.maxDays === null ||
-          r.maxDays === undefined ||
-          r.maxDays >= ageInDays),
-    );
-    if (matchedAgeRule) sharedBase = matchedAgeRule.priceCents;
-  }
-  // লিডের কাস্টম প্রাইস ওভাররাইড (যদি 0 বা নির্দিষ্ট সংখ্যা থাকে)
-  if (leadSharedPriceCents !== null && leadSharedPriceCents !== undefined) {
-    sharedBase = leadSharedPriceCents;
-  }
-
-  // ২. EXCLUSIVE প্রাইস বের করা
-  let exclusiveBase = categoryExclusiveBasePriceCents;
-  if (agePricingEnabled) {
-    const matchedAgeRule = agePriceRules.find(
-      (r) =>
-        r.priceType === 'EXCLUSIVE' &&
-        r.minDays <= ageInDays &&
-        (r.maxDays === null ||
-          r.maxDays === undefined ||
-          r.maxDays >= ageInDays),
-    );
-    if (matchedAgeRule) exclusiveBase = matchedAgeRule.priceCents;
-  }
+// One rule for every screen: category dollars -> optional age dollars -> membership %.
+// Per-lead copied prices are deliberately not read.
+export function calculateDynamicLeadPrice(params: IPriceCalculationParams) {
+  const discountPercent = params.userDiscountPercent ?? 0;
   if (
-    leadExclusivePriceCents !== null &&
-    leadExclusivePriceCents !== undefined
+    !Number.isInteger(discountPercent) ||
+    discountPercent < 0 ||
+    discountPercent > 100
   ) {
-    exclusiveBase = leadExclusivePriceCents;
+    throw new ConflictException('Membership discount is invalid');
   }
 
-  // ৩. মেম্বারশিপ ডিসকাউন্ট কর্তন
-  const sharedDiscountCents = Math.round(
-    (sharedBase * userDiscountPercent) / 100,
-  );
-  const exclusiveDiscountCents = Math.round(
-    (exclusiveBase * userDiscountPercent) / 100,
-  );
-
-  return {
-    originalSharedCents: sharedBase,
-    finalSharedCents: Math.max(0, sharedBase - sharedDiscountCents),
-    originalExclusiveCents: exclusiveBase,
-    finalExclusiveCents: Math.max(0, exclusiveBase - exclusiveDiscountCents),
-    appliedDiscountPercent: userDiscountPercent,
+  const calculate = (
+    type: 'SHARED' | 'EXCLUSIVE',
+    base: DollarValue | null,
+  ) => {
+    let selected = base;
+    if (params.agePricingEnabled) {
+      const matches = (params.agePriceRules ?? []).filter(
+        (rule) =>
+          rule.priceType === type &&
+          rule.minDays <= params.ageInDays &&
+          (rule.maxDays === null ||
+            rule.maxDays === undefined ||
+            rule.maxDays >= params.ageInDays),
+      );
+      if (matches.length > 1)
+        throw new ConflictException(
+          'Overlapping age-price rules need correction',
+        );
+      if (matches.length === 1) selected = matches[0].price;
+    }
+    if (selected === null)
+      return { original: null, final: null, discount: new Prisma.Decimal(0) };
+    const original = new Prisma.Decimal(selected);
+    if (
+      !original.isFinite() ||
+      original.isNegative() ||
+      original.decimalPlaces() > 2
+    ) {
+      throw new ConflictException('Price is not configured correctly');
+    }
+    const discount = original
+      .mul(discountPercent)
+      .div(100)
+      .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+    return { original, discount, final: original.minus(discount) };
   };
-};
+
+  const shared = calculate('SHARED', params.categorySharedBasePrice);
+  const exclusive = calculate('EXCLUSIVE', params.categoryExclusiveBasePrice);
+  return {
+    originalShared: shared.original,
+    finalShared: shared.final,
+    sharedDiscount: shared.discount,
+    originalExclusive: exclusive.original,
+    finalExclusive: exclusive.final,
+    exclusiveDiscount: exclusive.discount,
+    appliedDiscountPercent: discountPercent,
+  };
+}
+
+export function inventoryAge(createdAt: Date, now = new Date()) {
+  return Math.max(
+    0,
+    Math.floor((now.getTime() - createdAt.getTime()) / 86400000),
+  );
+}

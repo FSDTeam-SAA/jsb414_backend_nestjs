@@ -54,14 +54,8 @@ export class CategoriesService {
           createCategorieDto.agePricingEnabled !== undefined
             ? createCategorieDto.agePricingEnabled
             : false,
-        sharedBasePriceCents:
-          createCategorieDto.sharedBasePriceCents !== undefined
-            ? Number(createCategorieDto.sharedBasePriceCents)
-            : 2000,
-        exclusiveBasePriceCents:
-          createCategorieDto.exclusiveBasePriceCents !== undefined
-            ? Number(createCategorieDto.exclusiveBasePriceCents)
-            : 5000,
+        sharedBasePrice: createCategorieDto.sharedBasePrice ?? null,
+        exclusiveBasePrice: createCategorieDto.exclusiveBasePrice ?? null,
       },
     });
 

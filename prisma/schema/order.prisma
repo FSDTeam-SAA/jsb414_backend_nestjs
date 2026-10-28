@@ -4,12 +4,12 @@ model Order {
   userId      String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  subtotalCents    Int // মূল দামের যোগফল
-  discountCents    Int @default(0) // মেম্বারশিপে কত সেন্ট ছাড় পেল
-  totalAmountCents Int // ছাড়ের পর সর্বমোট সেন্টস
+  subtotal    Decimal @db.Decimal(14, 2)
+  discount    Decimal @default(0) @db.Decimal(14, 2)
+  totalAmount Decimal @db.Decimal(14, 2)
 
-  walletUsedCents Int @default(0) // অ্যাকাউন্ট ব্যালেন্স থেকে কত দেওয়া হলো
-  cardPaidCents   Int @default(0) // কার্ড (Stripe) থেকে কত দেওয়া হলো
+  walletUsed Decimal @default(0) @db.Decimal(14, 2)
+  cardPaid   Decimal @default(0) @db.Decimal(14, 2)
 
   status          PaymentStatus @default(COMPLETED)
   stripePaymentId String? // কার্ড পেমেন্টের ট্রানজেকশন আইডি
@@ -32,9 +32,9 @@ model OrderItem {
   lead    Lead   @relation(fields: [leadId], references: [id], onDelete: Restrict)
 
   priceType          LeadAvailability // SHARED নাকি EXCLUSIVE
-  originalPriceCents Int // ছাড়ের আগের দাম
-  discountCents      Int              @default(0) // ছাড়ের পরিমাণ
-  pricePaidCents     Int // ছাড়ের পর এই নির্দিষ্ট লিডের চূড়ান্ত দাম
+  originalPrice Decimal @db.Decimal(14, 2)
+  discount      Decimal @default(0) @db.Decimal(14, 2)
+  pricePaid     Decimal @db.Decimal(14, 2)
 
   createdAt DateTime @default(now())
 

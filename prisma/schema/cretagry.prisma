@@ -7,8 +7,8 @@ model Catagorie {
   isActive          Boolean @default(true)
   agePricingEnabled Boolean @default(false)
 
-  sharedBasePriceCents    Int?
-  exclusiveBasePriceCents Int?
+  sharedBasePrice    Decimal? @db.Decimal(14, 2)
+  exclusiveBasePrice Decimal? @db.Decimal(14, 2)
 
   leads         Lead[]
   agePriceRules AgePriceRule[]

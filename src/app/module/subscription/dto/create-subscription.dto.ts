@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsInt,
+  IsNumber,
   IsNotEmpty,
   IsString,
   Max,
@@ -24,8 +25,11 @@ export class CreateSubscriptionDto {
   @MaxLength(500)
   subTitle!: string;
 
-  @ApiProperty({ example: 4900, description: 'Price in cents' })
-  @IsInt()
+  @ApiProperty({
+    example: 49,
+    description: 'Monthly price in USD dollars: 49 means $49',
+  })
+  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
   @Min(0)
   @Max(2147483647)
   price!: number;

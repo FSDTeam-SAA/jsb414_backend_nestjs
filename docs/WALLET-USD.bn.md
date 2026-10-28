@@ -1,5 +1,7 @@
 # Wallet: USD input, storage and response
 
+LOCAL STATUS UPDATE: the localhost/jsb414 database now matches the current dollar schema. See LOCAL-PRICE-MIGRATION-2026-10-28.bn.md for the completed backup, migration-history reconciliation and price repair. No reset or repeat conversion is required locally.
+
 Updated 28 October 2026. Wallet remains prepaid business account credit, as in the existing product. It is not a bank account, escrow, safeguarded custody account or protection from the business owner. A top-up charges the customer and credits the business's Stripe balance; subsequent lead purchases spend the local account credit. This change introduces no payouts/withdrawals or indefinite card authorization holds.
 
 ## 1. What changed
@@ -19,7 +21,7 @@ PostgreSQL numeric columns display e.g. `2.00`; this is $2, not 200. JSON number
 - `WalletTransaction.balanceAfter` is now Decimal USD.
 - `Payment.amount` was already dollars; converted Float -> Decimal without dividing by 100.
 - Wallet responses omit cents fields; Cart balance and price summary responses use dollars too.
-- Existing inventory/category/age-rule/order schema fields explicitly named `...Cents` still use cents. Their storage was NOT silently reinterpreted as dollars. Cart converts these inventory prices at its response boundary. This task does not implement Order checkout or migrate every inventory price.
+- UPDATE: the later ALL-PRICES-USD.bn.md change also converts category/age/plan/order/purchase pricing to USD using its own reviewed migration. Follow that document's current field names and migration rules. This wallet document's original scope was wallet-only; Order checkout is still not implemented.
 
 ## 2. Beginner-friendly code map
 

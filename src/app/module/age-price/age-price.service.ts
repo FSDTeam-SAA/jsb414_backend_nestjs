@@ -89,7 +89,7 @@ export class AgePriceService {
         priceType: createAgePriceDto.priceType,
         minDays: createAgePriceDto.minDays,
         maxDays: createAgePriceDto.maxDays ?? null,
-        priceCents: createAgePriceDto.priceCents,
+        price: createAgePriceDto.price,
       },
       include: {
         category: {
@@ -146,7 +146,7 @@ export class AgePriceService {
         ...(dto.priceType ? { priceType: dto.priceType } : {}),
         ...(dto.minDays !== undefined ? { minDays: dto.minDays } : {}),
         ...(dto.maxDays !== undefined ? { maxDays: dto.maxDays } : {}),
-        ...(dto.priceCents !== undefined ? { priceCents: dto.priceCents } : {}),
+        ...(dto.price !== undefined ? { price: dto.price } : {}),
       },
       include: {
         category: {
@@ -175,6 +175,6 @@ export class AgePriceService {
         OR: [{ maxDays: { gte: ageInDays } }, { maxDays: null }],
       },
     });
-    return matchingRule ? matchingRule.priceCents : null;
+    return matchingRule ? matchingRule.price.toNumber() : null;
   }
 }

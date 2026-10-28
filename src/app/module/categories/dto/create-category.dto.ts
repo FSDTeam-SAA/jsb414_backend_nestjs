@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
-  IsInt,
+  IsNumber,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -49,17 +49,23 @@ export class CreateCategoryDto {
   @IsBoolean()
   agePricingEnabled?: boolean;
 
-  @ApiPropertyOptional({ example: '' })
-  @IsInt({ message: 'shared base price must be an integer' })
+  @ApiPropertyOptional({
+    example: 15,
+    description: 'Shared price in USD dollars; 15 means $15',
+  })
+  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
   @Min(0)
   @Type(() => Number)
   @IsOptional()
-  sharedBasePriceCents: number;
+  sharedBasePrice: number;
 
-  @ApiPropertyOptional({ example: '' })
-  @IsInt({ message: 'exclusive base price must be an integer' })
+  @ApiPropertyOptional({
+    example: 49,
+    description: 'Exclusive price in USD dollars; 49 means $49',
+  })
+  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
   @Min(0)
   @Type(() => Number)
   @IsOptional()
-  exclusiveBasePriceCents: number;
+  exclusiveBasePrice: number;
 }

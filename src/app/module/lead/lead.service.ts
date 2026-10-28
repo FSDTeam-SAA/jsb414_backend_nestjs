@@ -37,39 +37,17 @@ export class LeadService {
       imageUrl = uploadRes.url;
     }
 
-    // প্রাইস ক্যালকুলেশন: ইউজার যদি ম্যানুয়ালি কাস্টম priceCents দেয় তবে সেটা বসবে, অন্যথায় ক্যাটাগরির প্রাইস অটো বসবে
-    const customPrice =
-      createLeadDto.priceCents !== undefined &&
-      createLeadDto.priceCents !== null &&
-      String(createLeadDto.priceCents).trim() !== '' &&
-      Number(createLeadDto.priceCents) > 0
-        ? Number(createLeadDto.priceCents)
-        : null;
-
     const availability = createLeadDto.availability || 'SHARED';
-    let sharedBasePriceCents: number | null = null;
-    let exclusiveBasePriceCents: number | null = null;
-
-    if (availability === 'SHARED') {
-      sharedBasePriceCents = customPrice ?? category.sharedBasePriceCents;
-      exclusiveBasePriceCents = null;
-    } else if (availability === 'EXCLUSIVE') {
-      exclusiveBasePriceCents = customPrice ?? category.exclusiveBasePriceCents;
-      sharedBasePriceCents = null;
-    } else if (availability === 'BOTH') {
-      sharedBasePriceCents = customPrice ?? category.sharedBasePriceCents;
-      exclusiveBasePriceCents = category.exclusiveBasePriceCents;
-    }
 
     // ঠিকানা ও ফোন/ইমেইল থাকলে অটোমেটিক SELLABLE
     const hasAddress = Boolean(
       createLeadDto.propertyAddress?.trim() &&
-        createLeadDto.city?.trim() &&
-        createLeadDto.state?.trim(),
+      createLeadDto.city?.trim() &&
+      createLeadDto.state?.trim(),
     );
     const hasContact = Boolean(
       (createLeadDto.phoneNumbers && createLeadDto.phoneNumbers.length > 0) ||
-        (createLeadDto.emailAddresses && createLeadDto.emailAddresses.length > 0),
+      (createLeadDto.emailAddresses && createLeadDto.emailAddresses.length > 0),
     );
     const classification =
       hasAddress && hasContact ? 'SELLABLE' : 'NEEDS_ENRICHMENT';
@@ -94,8 +72,6 @@ export class LeadService {
           : availability !== 'EXCLUSIVE'
             ? 5
             : null,
-        sharedBasePriceCents,
-        exclusiveBasePriceCents,
         status: createLeadDto.status || 'ACTIVE',
         propertyImage: imageUrl,
         propertyType: createLeadDto.propertyType,
@@ -128,7 +104,7 @@ export class LeadService {
       },
     });
 
-    return lead;
+    return this.withCategoryPrices(lead);
   }
 
   // 2. সকল লিড দেখা (অ্যাডমিনের জন্য)
@@ -180,7 +156,7 @@ export class LeadService {
         total,
         totalPage: Math.ceil(total / limit),
       },
-      data,
+      data: data.map((lead) => this.withCategoryPrices(lead)),
     };
   }
 
@@ -204,7 +180,7 @@ export class LeadService {
       throw new NotFoundException(`Lead with ID '${id}' not found`);
     }
 
-    return lead;
+    return this.withCategoryPrices(lead);
   }
 
   // 4. লিড আপডেট
@@ -240,36 +216,18 @@ export class LeadService {
       imageUrl = updateLeadDto.propertyImage;
     }
 
-    let sharedBasePriceCents = existing.sharedBasePriceCents;
-    let exclusiveBasePriceCents = existing.exclusiveBasePriceCents;
-
-    if (updateLeadDto.priceCents !== undefined) {
-      const newPrice =
-        updateLeadDto.priceCents !== null && Number(updateLeadDto.priceCents) > 0
-          ? Number(updateLeadDto.priceCents)
-          : null;
-      const targetAvailability =
-        updateLeadDto.availability || existing.availability;
-
-      if (targetAvailability === 'SHARED') {
-        sharedBasePriceCents = newPrice;
-        exclusiveBasePriceCents = null;
-      } else if (targetAvailability === 'EXCLUSIVE') {
-        exclusiveBasePriceCents = newPrice;
-        sharedBasePriceCents = null;
-      } else if (targetAvailability === 'BOTH') {
-        sharedBasePriceCents = newPrice;
-      }
-    }
-
     const updated = await this.prisma.lead.update({
       where: { id },
       data: {
-        ...(updateLeadDto.categoryId && { categoryId: updateLeadDto.categoryId }),
+        ...(updateLeadDto.categoryId && {
+          categoryId: updateLeadDto.categoryId,
+        }),
         ...(updateLeadDto.saleDate && {
           saleDate: new Date(updateLeadDto.saleDate),
         }),
-        ...(updateLeadDto.stage !== undefined && { stage: updateLeadDto.stage }),
+        ...(updateLeadDto.stage !== undefined && {
+          stage: updateLeadDto.stage,
+        }),
         ...(updateLeadDto.mortgageInformation !== undefined && {
           mortgageInformation: updateLeadDto.mortgageInformation,
         }),
@@ -289,8 +247,6 @@ export class LeadService {
             ? Number(updateLeadDto.sharedLimit)
             : null,
         }),
-        sharedBasePriceCents,
-        exclusiveBasePriceCents,
         ...(updateLeadDto.status !== undefined && {
           status: updateLeadDto.status,
         }),
@@ -305,7 +261,9 @@ export class LeadService {
           unitNumber: updateLeadDto.unitNumber,
         }),
         ...(updateLeadDto.city !== undefined && { city: updateLeadDto.city }),
-        ...(updateLeadDto.state !== undefined && { state: updateLeadDto.state }),
+        ...(updateLeadDto.state !== undefined && {
+          state: updateLeadDto.state,
+        }),
         ...(updateLeadDto.zipcode !== undefined && {
           zipcode: updateLeadDto.zipcode,
         }),
@@ -347,7 +305,7 @@ export class LeadService {
       },
     });
 
-    return updated;
+    return this.withCategoryPrices(updated);
   }
 
   // 5. লিড ডিলিট (কেনা থাকলে ARCHIVED, না থাকলে ডিলিট)
@@ -465,14 +423,6 @@ export class LeadService {
       const sharedLimit = this.parseNumber(
         this.getFieldValue(row, ['sharedlimit', 'shared_limit']),
       );
-      const customPrice = this.parseNumber(
-        this.getFieldValue(row, [
-          'customprice',
-          'custom_price',
-          'price',
-          'baseprice',
-        ]),
-      );
       const status = this.getFieldValue(row, ['status']) || 'ACTIVE';
       const propertyType = this.getFieldValue(row, [
         'propertytype',
@@ -540,7 +490,6 @@ export class LeadService {
         source,
         availability,
         sharedLimit: sharedLimit ? Math.round(sharedLimit) : undefined,
-        sharedBasePriceCents: customPrice ? Math.round(customPrice) : undefined,
         status,
         propertyImage,
         propertyType,
@@ -573,6 +522,22 @@ export class LeadService {
       importedCount: createdCount.count,
       failedCount: errors.length,
       errors: errors.slice(0, 50),
+    };
+  }
+
+  // Lead price always follows its category; no copied/manual price to go stale.
+  private withCategoryPrices(lead: any) {
+    return {
+      ...lead,
+      sharedPrice:
+        lead.availability === 'EXCLUSIVE'
+          ? null
+          : lead.category.sharedBasePrice,
+      exclusivePrice:
+        lead.availability === 'SHARED'
+          ? null
+          : lead.category.exclusiveBasePrice,
+      currency: 'USD',
     };
   }
 

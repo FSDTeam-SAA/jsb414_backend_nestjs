@@ -9,8 +9,13 @@ import { setupApp } from './app/helper/setup-app';
 async function bootstrap() {
   validateEnvironment(process.env);
   const app = await NestFactory.create(AppModule, {
-    logger: new ConsoleLogger({ json: config.env === 'production' }),
+    rawBody: true,
+
+    logger: new ConsoleLogger({
+      json: config.env === 'production',
+    }),
   });
+  
   setupApp(app);
 
   if (config.env !== 'production' || process.env.SWAGGER_ENABLED === 'true') {

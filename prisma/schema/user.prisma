@@ -8,7 +8,7 @@ model User {
     photo       String?
     role        UserRole @default(user)
 
-    walletBalanceCents Int @default(0)
+    walletBalance Decimal @default(0) @db.Decimal(14, 2)
 
     otp            String?
     otpExpiry      DateTime?

@@ -1,12 +1,13 @@
 model Payment {
   id          String        @id @default(uuid())
-  amount      Float
+  amount      Decimal @db.Decimal(14, 2)
   currency    String        @default("USD")
   paymentType PaymentType   @default(SUBSCRIPTION)
   status      PaymentStatus @default(PENDING)
 
   stripePaymentIntentId String? @unique
-  stripeSessionId       String?
+  stripeSessionId       String? @unique
+  fundingRequestKey     String? @unique
   receiptUrl            String?
 
   userId String

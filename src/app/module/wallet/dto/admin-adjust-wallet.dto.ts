@@ -1,24 +1,39 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+  NotEquals,
+} from 'class-validator';
 
 export class AdminAdjustWalletDto {
-  @ApiProperty({ example: 'user-uuid' })
+  @ApiProperty()
   @IsUUID('4')
-  @IsNotEmpty()
   userId!: string;
 
   @ApiProperty({
-    example: 5000,
-    description:
-      'Amount in cents (positive to add balance, negative to deduct)',
+    example: -2.5,
+    description: 'USD dollars; negative deducts account credit',
   })
-  @Type(() => Number)
-  @IsInt()
-  amountCents!: number;
+  @IsNumber({ maxDecimalPlaces: 2, allowInfinity: false, allowNaN: false })
+  @Min(-10000)
+  @Max(10000)
+  @NotEquals(0)
+  amount!: number;
 
-  @ApiProperty({ example: 'Customer loyalty bonus / support credit' })
+  @ApiProperty()
   @IsString()
   @IsNotEmpty()
+  @MaxLength(500)
   reason!: string;
+
+  @ApiProperty({
+    description: 'Reuse this UUID when retrying the same adjustment',
+  })
+  @IsUUID('4')
+  requestId!: string;
 }

@@ -106,7 +106,30 @@ export class CardService {
       },
     });
 
-    return cartItem;
+    // Cart responses use dollars; category/lead inventory storage still uses cents.
+    const { lead: cartLead, ...item } = cartItem;
+    const sharedPrice =
+      cartLead.sharedBasePriceCents ?? cartLead.category.sharedBasePriceCents;
+    const exclusivePrice =
+      cartLead.exclusiveBasePriceCents ??
+      cartLead.category.exclusiveBasePriceCents;
+    return {
+      ...item,
+      lead: {
+        id: cartLead.id,
+        leadNumber: cartLead.leadNumber,
+        city: cartLead.city,
+        state: cartLead.state,
+        county: cartLead.county,
+        zipcode: cartLead.zipcode,
+        propertyType: cartLead.propertyType,
+        stage: cartLead.stage,
+        sharedPrice: sharedPrice === null ? null : sharedPrice / 100,
+        exclusivePrice: exclusivePrice === null ? null : exclusivePrice / 100,
+        currency: 'USD',
+        category: { id: cartLead.category.id, name: cartLead.category.name },
+      },
+    };
   }
 
   async bulkAddToCart(userId: string, bulkAddToCartDto: BulkAddToCartDto) {
@@ -207,7 +230,7 @@ export class CardService {
   async getCart(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { walletBalanceCents: true },
+      select: { walletBalance: true },
     });
 
     // ৩.২ কাস্টমারের কোনো অ্যাক্টিভ মেম্বারশিপ টায়ার ও ডিসকাউন্ট আছে কিনা চেক
@@ -292,9 +315,9 @@ export class CardService {
         stage: lead.stage,
         categoryName: lead.category?.name,
         priceType: item.priceType,
-        originalPriceCents: basePrice,
-        discountCents,
-        finalPriceCents: finalPrice,
+        originalPrice: basePrice / 100,
+        discount: discountCents / 100,
+        finalPrice: finalPrice / 100,
         addedAt: item.createdAt,
       };
     });
@@ -304,10 +327,11 @@ export class CardService {
     return {
       summary: {
         totalItems: items.length,
-        subtotalCents,
-        discountCents: totalDiscountCents,
-        totalCents,
-        walletBalanceCents: user?.walletBalanceCents ?? 0,
+        subtotal: subtotalCents / 100,
+        discount: totalDiscountCents / 100,
+        total: totalCents / 100,
+        walletBalance: user?.walletBalance.toNumber() ?? 0,
+        currency: 'USD',
         appliedDiscountPercent: discountPercent,
         hasActiveSubscription: Boolean(activeSub),
         subscriptionName: activeSub?.subscribe?.title || null,

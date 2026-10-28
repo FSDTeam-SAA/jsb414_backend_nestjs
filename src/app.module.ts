@@ -16,6 +16,7 @@ import { UserModule } from './app/module/user/user.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { OrderModule } from './app/module/order/order.module';
 import { WalletModule } from './app/module/wallet/wallet.module';
+import { WebhookModule } from './app/module/webhook/webhook.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { WalletModule } from './app/module/wallet/wallet.module';
     SavedSearcModule,
     OrderModule,
     WalletModule,
+    WebhookModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

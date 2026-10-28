@@ -3,11 +3,13 @@ model WalletTransaction {
   userId       String
   user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  amountCents  Int                   // কত সেন্ট লেনদেন হলো (যেমন: 10000 = $100)
-  balanceAfter Int                   // এই লেনদেনের পর বর্তমান ব্যালেন্স কত হলো
+  amount       Decimal @db.Decimal(14, 2) // USD: 2.50 means $2.50
+  balanceAfter Decimal @db.Decimal(14, 2) // USD balance after this entry
   type         WalletTransactionType // TOP_UP, PURCHASE, REFUND, ADMIN_ADJUSTMENT
   description  String?               // বিবরণ (যেমন: "Added funds: $100.00")
   referenceId  String?               // অর্ডার আইডি, পেমেন্ট আইডি বা অ্যাডমিন আইডি
+  operationKey String? @unique        // Prevent duplicate payment/adjustment entries
+  actorId      String?                // Admin who made an adjustment
 
   createdAt    DateTime              @default(now())
 

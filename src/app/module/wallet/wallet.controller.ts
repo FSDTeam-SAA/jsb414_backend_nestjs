@@ -36,7 +36,9 @@ export class WalletController {
   }
 
   @Post('add-funds')
-  @ApiOperation({ summary: 'Add funds to wallet (e.g. $100, $250, $500)' })
+  @ApiOperation({
+    summary: 'Create Stripe checkout for prepaid account credit (USD)',
+  })
   @ApiBearerAuth('access-token')
   @UseGuards(AuthGuard())
   @HttpCode(HttpStatus.CREATED)
@@ -44,7 +46,8 @@ export class WalletController {
     const userId = req.user!.id;
     const result = await this.walletService.addFunds(userId, dto);
     return {
-      message: 'Funds added successfully',
+      message:
+        'Funding request processed; account credit is added only after verified payment',
       data: result,
     };
   }
@@ -67,13 +70,19 @@ export class WalletController {
 
   @Post('admin/adjust')
   @ApiOperation({
-    summary: 'Admin manual balance adjustment (Admin/Superadmin only)',
+    summary: 'Super Admin manual account-credit adjustment in USD',
   })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('superadmin'))
   @HttpCode(HttpStatus.OK)
-  async adminAdjustBalance(@Body() dto: AdminAdjustWalletDto) {
-    const result = await this.walletService.adminAdjustBalance(dto);
+  async adminAdjustBalance(
+    @Req() req: Request,
+    @Body() dto: AdminAdjustWalletDto,
+  ) {
+    const result = await this.walletService.adminAdjustBalance(
+      req.user!.id,
+      dto,
+    );
     return {
       message: 'Wallet balance adjusted successfully',
       data: result,

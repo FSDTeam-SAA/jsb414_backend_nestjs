@@ -15,7 +15,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AuthGuard } from 'src/app/middlewares/auth.guard';
 import { CardService } from './card.service';
-import { AddToCartDto } from './dto/add-to-cart.dto';
+import { AddToCartDto, AddToCartMultipolDto } from './dto/add-to-cart.dto';
 import { BulkAddToCartDto } from './dto/bulk-add-to-cart.dto';
 
 @ApiTags('Customer Cart')
@@ -35,6 +35,22 @@ export class CardController {
     const result = await this.cardService.addToCart(userId, dto);
     return {
       message: 'Lead added to cart successfully',
+      data: result,
+    };
+  }
+
+  @Post('multiple')
+  @ApiOperation({
+    summary: 'Add multiple selected leads to cart',
+  })
+  async addToCartMultipol(
+    @Req() req: Request,
+    @Body() dto: AddToCartMultipolDto,
+  ) {
+    const result = await this.cardService.addToCartMultipol(req.user!.id, dto);
+
+    return {
+      message: 'Leads added to cart successfully',
       data: result,
     };
   }

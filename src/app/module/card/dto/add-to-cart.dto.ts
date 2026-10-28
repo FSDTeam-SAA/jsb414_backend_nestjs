@@ -1,5 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsNotEmpty, IsOptional, IsUUID } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsUUID,
+  ValidateNested,
+} from 'class-validator';
 
 export class AddToCartDto {
   @ApiProperty({
@@ -22,4 +31,15 @@ export class AddToCartDto {
     message: 'priceType must be either SHARED or EXCLUSIVE',
   })
   priceType?: 'SHARED' | 'EXCLUSIVE';
+}
+
+export class AddToCartMultipolDto {
+  @ApiProperty({
+    type: [AddToCartDto],
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => AddToCartDto)
+  cartData!: AddToCartDto[];
 }

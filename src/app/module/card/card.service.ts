@@ -10,7 +10,7 @@ import {
   calculateDynamicLeadPrice,
   inventoryAge,
 } from '../../helper/pricing.helper';
-import { AddToCartDto } from './dto/add-to-cart.dto';
+import { AddToCartDto, AddToCartMultipolDto } from './dto/add-to-cart.dto';
 import { BulkAddToCartDto } from './dto/bulk-add-to-cart.dto';
 
 @Injectable()
@@ -127,6 +127,33 @@ export class CardService {
         currency: 'USD',
       },
     };
+  }
+
+  async addToCartMultipol(
+    userId: string,
+    addToCartMultipol: AddToCartMultipolDto,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const results: Awaited<ReturnType<CardService['addToCart']>>[] = [];
+
+    for (let i = 0; i < addToCartMultipol.cartData.length; i++) {
+      const item = addToCartMultipol.cartData[i];
+
+      const result = await this.addToCart(userId, item);
+
+      results.push(result);
+    }
+
+    return results;
   }
 
   async bulkAddToCart(userId: string, bulkAddToCartDto: BulkAddToCartDto) {

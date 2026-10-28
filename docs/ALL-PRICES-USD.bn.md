@@ -2,6 +2,8 @@
 
 LOCAL STATUS UPDATE: localhost/jsb414 was safely migrated on 28 October 2026. See LOCAL-PRICE-MIGRATION-2026-10-28.bn.md. Do not reapply the conversion or reset this database. The migration precautions below remain relevant for other/unverified environments.
 
+LATER CLEANUP: at the user's explicit request, unused legacySharedPrice and legacyExclusivePrice were removed by migration 202610280004_drop_unused_lead_prices after a local column backup. The six current lead rows had null values in both columns. Category sharedBasePrice/exclusiveBasePrice remain the price source. Earlier descriptions below of retained legacy numeric fields describe the preceding conversion step, not the final schema. Original migration files are unchanged so checksums/history remain valid.
+
 Updated 28 October 2026. This replaces the older cents-based pricing instructions and the proposed separate manual lead-override API. No new Pricing module or override endpoints were added.
 
 ## একটি নিয়ম

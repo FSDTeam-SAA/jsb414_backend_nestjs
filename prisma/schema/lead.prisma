@@ -30,8 +30,6 @@ model Lead {
   sharedSalesCount        Int              @default(0)
   exclusiveSoldAt         DateTime?
   lastImportedAt          DateTime?
-  legacySharedPrice       Decimal? @db.Decimal(14, 2) // Archived old per-lead prices; category now owns pricing
-  legacyExclusivePrice    Decimal? @db.Decimal(14, 2)
   adminId                 String
   admin                   User             @relation(fields: [adminId], references: [id])
   cartItems               CartItem[]

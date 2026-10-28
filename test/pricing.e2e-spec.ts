@@ -65,7 +65,6 @@ describe('Direct dollar pricing API contracts (database mocked)', () => {
           id,
           ...data,
           category,
-          legacySharedPrice: new Prisma.Decimal(999),
         })),
       },
     };

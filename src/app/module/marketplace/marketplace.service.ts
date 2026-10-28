@@ -1,5 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { Prisma } from '../../../../prisma/generated/prisma/client';
 import buildWhereConditions from 'src/app/helper/buildWhereConditions';
 import paginationHelper, { IOptions } from 'src/app/helper/pagenation';
 import { IFilterParams } from 'src/app/helper/pick';
@@ -13,11 +18,35 @@ import {
 export class MarketplaceService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Same sale rules for list, count, saved searches and single preview.
+  private availableLeadConditions(userId: string): Prisma.LeadWhereInput {
+    if (!userId) throw new UnauthorizedException('Login is required');
+
+    return {
+      status: 'ACTIVE',
+      classification: 'SELLABLE',
+      category: { isActive: true },
+      exclusiveSoldAt: null,
+      userLead: { none: { userId } },
+      OR: [
+        // BOTH may still be purchased exclusively even if Shared slots are full.
+        { availability: { in: ['EXCLUSIVE', 'BOTH'] } },
+        {
+          availability: 'SHARED',
+          OR: [
+            { sharedLimit: null },
+            { sharedSalesCount: { lt: this.prisma.lead.fields.sharedLimit } },
+          ],
+        },
+      ],
+    };
+  }
+
   // 1. মার্কেটপ্লেসের সকল লিড লিস্ট (কেনার পূর্বে সেনসিটিভ ডেটা ছাড়া)
   async getAllMarketPlace(
     params: IFilterParams,
     options: IOptions,
-    userId?: string,
+    userId: string,
   ) {
     const discountPercent = await this.discountFor(userId);
     const { limit, page, skip, sortBy, sortOrder } = paginationHelper(options);
@@ -31,12 +60,11 @@ export class MarketplaceService {
       'propertyType',
     ];
 
-    const whereConditions = buildWhereConditions(params, searchableFields, {
-      status: 'ACTIVE',
-      classification: 'SELLABLE',
-      category: { isActive: true },
-      exclusiveSoldAt: null,
-    });
+    const whereConditions = buildWhereConditions(
+      params,
+      searchableFields,
+      this.availableLeadConditions(userId),
+    );
 
     const [data, total] = await Promise.all([
       this.prisma.lead.findMany({
@@ -118,15 +146,12 @@ export class MarketplaceService {
     };
   }
 
-  async getSingleMarketplaceLead(id: string, userId?: string) {
+  async getSingleMarketplaceLead(id: string, userId: string) {
     const discountPercent = await this.discountFor(userId);
     const lead = await this.prisma.lead.findFirst({
       where: {
         id,
-        status: 'ACTIVE',
-        classification: 'SELLABLE',
-        category: { isActive: true },
-        exclusiveSoldAt: null,
+        ...this.availableLeadConditions(userId),
       },
       select: {
         id: true,

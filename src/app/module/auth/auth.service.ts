@@ -14,7 +14,7 @@ import { validatePasswordBytes } from '../../helper/password';
 import { publicUserSelect } from '../../helper/public-user-select';
 import sendMailer from '../../helper/sendMailer';
 import { passwordVersion, tokenDurationSeconds } from '../../helper/token';
-import { CreateAuthDto, LoginAuthDto } from './dto/create-auth.dto';
+import { ChangePassword, CreateAuthDto, LoginAuthDto } from './dto/create-auth.dto';
 
 interface AuthTokenPayload {
   id: string;
@@ -272,5 +272,25 @@ export class AuthService {
     if (result.count !== 1)
       throw new BadRequestException('Invalid or expired reset token');
     return { message: 'Password reset successfully' };
+  }
+
+  async changePassword(userId: string, dto: ChangePassword) {
+    validatePasswordBytes(dto.newPassword);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    const isPasswordValid = await bcrypt.compare(dto.oldPassword, user.password);
+    if (!isPasswordValid) {
+      throw new BadRequestException('Incorrect current password');
+    }
+    const password = await bcrypt.hash(dto.newPassword, config.bcryptSaltRounds);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password },
+    });
+    return { message: 'Password changed successfully' };
   }
 }

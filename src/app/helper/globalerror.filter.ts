@@ -11,8 +11,6 @@ import { Request, Response } from 'express';
 
 import { ValidationError } from 'class-validator';
 import { MulterError } from 'multer';
-import { ZodError } from 'zod';
-import { AxiosError } from 'axios';
 import {
   JsonWebTokenError,
   NotBeforeError,
@@ -27,12 +25,10 @@ import {
   handleCloudinaryError,
   isCloudinaryError,
 } from '../errors/cloudinaryError';
-import { handleZodError } from '../errors/zodError';
 import { handlePrismaError } from '../errors/prismaerror';
 import { handleJwtError } from '../errors/jwtError';
 import { handleSyntaxError } from '../errors/syntaxError';
 import { handleProgrammerError } from '../errors/programmerError';
-import { handleAxiosError } from '../errors/axiosError';
 import { TErrorResponse, TErrorSource } from '../interface/error.interface';
 import { Prisma } from '../../../prisma/generated/prisma/client';
 
@@ -113,17 +109,12 @@ export class GlobalExceptionFilter<T> implements ExceptionFilter {
       ({ statusCode, message, errorSources } = handleCloudinaryError(err));
     }
 
-    // 5️  ZodError
-    else if (err instanceof ZodError) {
-      ({ statusCode, message, errorSources } = handleZodError(err));
-    }
-
-    // 6️  Prisma Errors (all 5 types)
+    // Prisma database errors
     else if (isPrismaError(err)) {
       ({ statusCode, message, errorSources } = handlePrismaError(err));
     }
 
-    // 7️  JWT Errors
+    // JWT errors
     else if (
       err instanceof TokenExpiredError ||
       err instanceof NotBeforeError ||
@@ -132,24 +123,17 @@ export class GlobalExceptionFilter<T> implements ExceptionFilter {
       ({ statusCode, message, errorSources } = handleJwtError(err));
     }
 
-    // 8️  SyntaxError (bad JSON body)
+    // Invalid JSON body
     else if (err instanceof SyntaxError && 'body' in err) {
       ({ statusCode, message, errorSources } = handleSyntaxError(err));
     }
 
-    // 9️  TypeError / RangeError
+    // TypeError / RangeError
     else if (err instanceof TypeError || err instanceof RangeError) {
       ({ statusCode, message, errorSources } = handleProgrammerError(err));
     }
 
-    // 🔟  Axios Error (external API call)
-    else if (err instanceof AxiosError || (err as any)?.isAxiosError === true) {
-      ({ statusCode, message, errorSources } = handleAxiosError(
-        err as AxiosError,
-      ));
-    }
-
-    // 1️1️  Generic JS Error
+    // Other errors
     else if (err instanceof Error) {
       message = err.message;
       errorSources = [{ path: '', message: err.message }];

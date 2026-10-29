@@ -91,18 +91,8 @@ const uploadToCloudinary = async (
   });
 };
 
-const deleteFromCloudinary = async (public_id: string): Promise<void> => {
-  if (!public_id) return;
-  try {
-    await cloudinary.uploader.destroy(public_id);
-  } catch (error) {
-    console.error('Cloudinary delete failed:', error);
-  }
-};
-
 export const fileUpload = {
   uploadToCloudinary,
-  deleteFromCloudinary,
   uploadConfig,
   documentUploadConfig,
 };

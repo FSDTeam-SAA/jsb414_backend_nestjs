@@ -14,7 +14,7 @@ import { validatePasswordBytes } from '../../helper/password';
 import { publicUserSelect } from '../../helper/public-user-select';
 import sendMailer from '../../helper/sendMailer';
 import { passwordVersion, tokenDurationSeconds } from '../../helper/token';
-import { ChangePassword, CreateAuthDto, LoginAuthDto } from './dto/create-auth.dto';
+import { ChangePassword, CreateAuthDto, LoginAuthDto, ResendRegistrationOtpDto, VerifyRegistrationOtpDto } from './dto/create-auth.dto';
 
 interface AuthTokenPayload {
   id: string;

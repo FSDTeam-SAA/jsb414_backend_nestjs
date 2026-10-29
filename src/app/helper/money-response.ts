@@ -12,8 +12,6 @@ export function moneyResponse(value: any): any {
     return value;
   if (Array.isArray(value)) return value.map(moneyResponse);
   return Object.fromEntries(
-    Object.entries(value)
-      .filter(([key]) => !['legacyPriceText'].includes(key))
-      .map(([key, item]) => [key, moneyResponse(item)]),
+    Object.entries(value).map(([key, item]) => [key, moneyResponse(item)]),
   );
 }

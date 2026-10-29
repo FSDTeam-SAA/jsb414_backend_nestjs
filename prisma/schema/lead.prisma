@@ -8,7 +8,6 @@ model Lead {
   propertyAddress         String?
   unitNumber              String?
   city                    String?
-  legacyPriceText         String? @map("price") // Old data retained, not used for pricing
   county                  String?
   state                   String?
   zipcode                 String?

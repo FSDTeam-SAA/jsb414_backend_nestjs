@@ -14,7 +14,12 @@ import { validatePasswordBytes } from '../../helper/password';
 import { publicUserSelect } from '../../helper/public-user-select';
 import sendMailer from '../../helper/sendMailer';
 import { passwordVersion, tokenDurationSeconds } from '../../helper/token';
-import { CreateAuthDto, LoginAuthDto } from './dto/create-auth.dto';
+import {
+  CreateAuthDto,
+  LoginAuthDto,
+  ResendRegistrationOtpDto,
+  VerifyRegistrationOtpDto,
+} from './dto/create-auth.dto';
 
 interface AuthTokenPayload {
   id: string;
@@ -78,18 +83,168 @@ export class AuthService {
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
-    if (existing) throw new ConflictException('Email is already registered');
+    if (existing && existing.verifiedEmail) {
+      throw new ConflictException('Email is already registered');
+    }
+
     const password = await bcrypt.hash(dto.password, config.bcryptSaltRounds);
-    return this.prisma.user.create({
+    const otp = randomInt(100000, 1000000).toString();
+    const otpHash = this.hashResetValue(otp);
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    let user;
+    if (existing && !existing.verifiedEmail) {
+      user = await this.prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          phoneNumber: dto.phoneNumber,
+          password,
+          otp: otpHash,
+          otpExpiry,
+        },
+        select: publicUserSelect,
+      });
+    } else {
+      user = await this.prisma.user.create({
+        data: {
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          email: dto.email,
+          phoneNumber: dto.phoneNumber,
+          password,
+          otp: otpHash,
+          otpExpiry,
+          verifiedEmail: false,
+        },
+        select: publicUserSelect,
+      });
+    }
+
+    try {
+      await sendMailer(
+        dto.email,
+        'Verify Your Email - Foreclosure Gold',
+        `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #0d2847; text-align: center;">Verify Your Email</h2>
+          <p>Hi ${dto.firstName},</p>
+          <p>Thank you for signing up for <strong>Foreclosure Gold</strong>. Please use the following 6-digit verification code to complete your registration:</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #0d2847; background: #f0f4f8; padding: 12px 24px; border-radius: 6px; border: 1px dashed #0d2847;">
+              ${otp}
+            </span>
+          </div>
+          <p style="color: #666; font-size: 14px;">This code will expire in 10 minutes.</p>
+        </div>`,
+      );
+    } catch {
+      // Do not block response in development if mail server is unreachable
+    }
+
+    return user;
+  }
+
+  async verifyRegistrationOtp(
+    dto: VerifyRegistrationOtpDto,
+    res?: Response,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+    if (
+      !user ||
+      !user.otp ||
+      !user.otpExpiry ||
+      user.otpExpiry.getTime() <= Date.now() ||
+      user.otp !== this.hashResetValue(dto.otp)
+    ) {
+      throw new BadRequestException('Invalid or expired OTP');
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: user.id },
       data: {
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        email: dto.email,
-        phoneNumber: dto.phoneNumber,
-        password,
+        verifiedEmail: true,
+        otp: null,
+        otpExpiry: null,
       },
       select: publicUserSelect,
     });
+
+    const accessToken = this.signToken(user, 'access');
+    const refreshToken = this.signToken(user, 'refresh');
+
+    if (res) {
+      res.cookie('refreshToken', refreshToken, {
+        ...this.cookieOptions(),
+        maxAge: tokenDurationSeconds(config.jwt.refreshTokenExpires) * 1000,
+      });
+    }
+
+    return {
+      user: updatedUser,
+      accessToken,
+    };
+  }
+
+  async resendRegistrationOtp(dto: ResendRegistrationOtpDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+    if (!user) {
+      throw new BadRequestException('Account not found with this email');
+    }
+    if (user.verifiedEmail) {
+      throw new BadRequestException('Email is already verified. Please login.');
+    }
+
+    // Rate limiting: allow resend only after 1 minute has elapsed
+    if (
+      user.otp &&
+      user.otpExpiry &&
+      user.otpExpiry.getTime() > Date.now() + 9 * 60 * 1000
+    ) {
+      throw new BadRequestException(
+        'Please wait at least 1 minute before requesting another code',
+      );
+    }
+
+    const otp = randomInt(100000, 1000000).toString();
+    const otpHash = this.hashResetValue(otp);
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        otp: otpHash,
+        otpExpiry,
+      },
+    });
+
+    try {
+      await sendMailer(
+        user.email,
+        'Verify Your Email - Foreclosure Gold',
+        `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #0d2847; text-align: center;">Verify Your Email</h2>
+          <p>Hi ${user.firstName},</p>
+          <p>Here is your new 6-digit verification code:</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #0d2847; background: #f0f4f8; padding: 12px 24px; border-radius: 6px; border: 1px dashed #0d2847;">
+              ${otp}
+            </span>
+          </div>
+          <p style="color: #666; font-size: 14px;">This code will expire in 10 minutes.</p>
+        </div>`,
+      );
+    } catch {
+      // Do not block in dev
+    }
+
+    return {
+      message: `A new 6-digit verification code has been sent to ${dto.email}`,
+    };
   }
 
   async login(dto: LoginAuthDto, res: Response) {

@@ -17,8 +17,10 @@ import {
   CreateAuthDto,
   ForgotPasswordDto,
   LoginAuthDto,
+  ResendRegistrationOtpDto,
   ResetPasswordDto,
   VerifyEmailOtp,
+  VerifyRegistrationOtpDto,
 } from './dto/create-auth.dto';
 
 @ApiTags('Auth')
@@ -26,15 +28,41 @@ import {
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @ApiOperation({ summary: 'register user' })
+  @ApiOperation({ summary: 'Register user & send 6-digit email OTP' })
   @Post()
   @UseGuards(AuthRateLimitGuard)
   @HttpCode(HttpStatus.CREATED)
   async register(@Body() createAuthDto: CreateAuthDto) {
     const result = await this.authService.register(createAuthDto);
     return {
-      message: 'User Created Successfully',
+      message: `User created successfully. We sent a 6-digit code to ${createAuthDto.email}`,
       data: result,
+    };
+  }
+
+  @ApiOperation({ summary: 'Verify email OTP after registration' })
+  @Post('verify-registration-otp')
+  @UseGuards(AuthRateLimitGuard)
+  @HttpCode(HttpStatus.OK)
+  async verifyRegistrationOtp(
+    @Body() dto: VerifyRegistrationOtpDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.verifyRegistrationOtp(dto, res);
+    return {
+      message: 'Email verified successfully',
+      data: result,
+    };
+  }
+
+  @ApiOperation({ summary: 'Resend registration OTP' })
+  @Post('resend-registration-otp')
+  @UseGuards(AuthRateLimitGuard)
+  @HttpCode(HttpStatus.OK)
+  async resendRegistrationOtp(@Body() dto: ResendRegistrationOtpDto) {
+    const result = await this.authService.resendRegistrationOtp(dto);
+    return {
+      message: result.message,
     };
   }
 
@@ -110,7 +138,7 @@ export class AuthController {
     };
   }
 
-  @ApiOperation({ summary: 'Verify email OTP' })
+  @ApiOperation({ summary: 'Verify email OTP for password reset' })
   @Post('verify-email-otp')
   @UseGuards(AuthRateLimitGuard)
   @HttpCode(HttpStatus.OK)

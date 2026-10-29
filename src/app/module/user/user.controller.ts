@@ -26,6 +26,7 @@ import { fileUpload } from '../../helper/fileUploder';
 import pick from '../../helper/pick';
 import { AuthGuard } from '../../middlewares/auth.guard';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateInterestsDto } from './dto/update-interests.dto';
 import { UserService } from './user.service';
 import { UserQueryDto } from './dto/user-query.dto';
 
@@ -50,25 +51,7 @@ export class UserController {
     name: 'role',
     type: String,
     required: false,
-    description: 'role',
-  })
-  @ApiQuery({
-    name: 'email',
-    type: String,
-    required: false,
-    description: 'email',
-  })
-  @ApiQuery({
-    name: 'firstName',
-    type: String,
-    required: false,
-    description: 'firstName',
-  })
-  @ApiQuery({
-    name: 'lastName',
-    type: String,
-    required: false,
-    description: 'lastName',
+    description: 'filter by role (user, admin, superadmin)',
   })
   @ApiQuery({
     name: 'page',
@@ -80,30 +63,23 @@ export class UserController {
     name: 'limit',
     type: Number,
     required: false,
-    description: 'limit number',
+    description: 'limit per page',
   })
   @ApiQuery({
     name: 'sortBy',
     type: String,
     required: false,
-    description: 'sort by',
+    description: 'sort by field',
   })
   @ApiQuery({
     name: 'sortOrder',
     type: String,
     required: false,
-    description: 'sort order',
+    description: 'sort order (asc or desc)',
   })
   @HttpCode(HttpStatus.OK)
   async getAllUser(@Query() query: UserQueryDto) {
-    const filters = pick(query, [
-      'searchTerm',
-      'role',
-      'firstName',
-      'lastName',
-      'email',
-      'phoneNumber',
-    ]);
+    const filters = pick(query, ['searchTerm', 'role']);
     const options = pick(query, ['page', 'limit', 'sortBy', 'sortOrder']);
     const result = await this.userService.getAllUser(filters, options);
 
@@ -154,6 +130,26 @@ export class UserController {
 
     return {
       message: 'profile updated successfully',
+      data: result,
+    };
+  }
+
+  @Patch('interests')
+  @UseGuards(AuthGuard())
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Update user lead interests (Figma: What leads interest you?)',
+  })
+  @HttpCode(HttpStatus.OK)
+  async updateInterests(
+    @Req() req: Request,
+    @Body() dto: UpdateInterestsDto,
+  ) {
+    const userId = req.user!.id;
+    const result = await this.userService.updateInterests(userId, dto);
+
+    return {
+      message: 'Interests saved successfully',
       data: result,
     };
   }

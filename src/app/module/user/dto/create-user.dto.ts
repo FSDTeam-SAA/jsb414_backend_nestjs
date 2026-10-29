@@ -30,7 +30,6 @@ export class CreateUserDto {
   email!: string;
 
   @ApiProperty({ example: '+8801700000000' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @IsNotEmpty()
   @MaxLength(32)

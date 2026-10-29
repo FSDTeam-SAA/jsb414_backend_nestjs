@@ -14,6 +14,13 @@ model User {
     otpExpiry      DateTime?
     verifiedForget Boolean?
 
+    verifiedEmail Boolean @default(false)
+
+    // কাস্টমারের পছন্দের লিড ক্যাটাগরি ও এলাকা (Figma: What leads interest you?)
+    leadTypes        String[] @default([])
+    interestedStates String[] @default([])
+    interestedCities String[] @default([])
+
     createdPlans       Subscribe[]         @relation("SubscribeCreatedBy")
     updatedPlans       Subscribe[]         @relation("SubscribeUpdatedBy")
     userSubscribes     UserSubscribe[]

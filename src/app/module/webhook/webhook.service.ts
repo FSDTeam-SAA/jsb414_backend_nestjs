@@ -51,11 +51,7 @@ export class WebhookService {
         break;
       }
 
-      // ভবিষ্যতে subscription billing-এর event এখানে যোগ করবে।
-      // যেমন: invoice.paid, customer.subscription.updated
-
       default:
-        // বর্তমানে প্রয়োজন নেই এমন event ignore করছি।
         break;
     }
 
@@ -71,8 +67,9 @@ export class WebhookService {
         await this.handleWalletFunding(session);
         break;
 
-      // পরে LEAD_PURCHASE এবং SUBSCRIPTION-এর
-      // আলাদা handler/service call এখানে যোগ করবে।
+      case 'SUBSCRIPTION':
+        await this.handleSubscriptionPayment(session);
+        break;
 
       default:
         break;
@@ -81,7 +78,6 @@ export class WebhookService {
 
   // ৩. Wallet payment যাচাই।
   private async handleWalletFunding(session: Stripe.Checkout.Session) {
-    // Completed event মানেই সব ক্ষেত্রে paid নয়।
     if (session.mode !== 'payment' || session.payment_status !== 'paid') {
       return;
     }
@@ -104,7 +100,6 @@ export class WebhookService {
       throw new InternalServerErrorException('Wallet payment record not found');
     }
 
-    // Database and wallet use USD; compare Stripe's integer cents only here.
     const amountCents = stripeCents(payment.amount);
 
     const sessionDoesNotMatch =
@@ -137,7 +132,6 @@ export class WebhookService {
         where: {
           id: payment.id,
           status: 'PENDING',
-
           OR: [{ stripeSessionId: null }, { stripeSessionId: session.id }],
         },
         data: {
@@ -147,7 +141,6 @@ export class WebhookService {
         },
       });
 
-      // একই payment আগেই process হলে আবার credit নয়।
       if (claimed.count === 0) {
         return;
       }
@@ -177,6 +170,66 @@ export class WebhookService {
           description: 'Prepaid account credit through Stripe',
         },
       });
+    });
+  }
+
+  // ৪. Subscription payment যাচাই ও সক্রিয়করণ।
+  private async handleSubscriptionPayment(session: Stripe.Checkout.Session) {
+    if (session.mode !== 'payment' || session.payment_status !== 'paid') {
+      return;
+    }
+
+    const paymentId = session.metadata?.paymentId;
+    if (!paymentId) return;
+
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+    });
+    if (!payment || payment.status === 'COMPLETED') return;
+
+    const paymentIntentId =
+      typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id;
+
+    const now = new Date();
+    const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'COMPLETED',
+          stripeSessionId: session.id,
+          stripePaymentIntentId: paymentIntentId,
+        },
+      });
+
+      const existingSubscription = await tx.userSubscribe.findFirst({
+        where: { userId: payment.userId },
+      });
+
+      if (existingSubscription) {
+        await tx.userSubscribe.update({
+          where: { id: existingSubscription.id },
+          data: {
+            subscribeId: payment.subscribeId!,
+            status: 'ACTIVE',
+            startDate: now,
+            endDate,
+          },
+        });
+      } else {
+        await tx.userSubscribe.create({
+          data: {
+            userId: payment.userId,
+            subscribeId: payment.subscribeId!,
+            status: 'ACTIVE',
+            startDate: now,
+            endDate,
+          },
+        });
+      }
     });
   }
 }

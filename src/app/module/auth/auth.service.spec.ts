@@ -30,6 +30,7 @@ describe('Authentication security', () => {
       otp: null,
       otpExpiry: null,
       verifiedForget: false,
+      verifiedEmail: false,
     };
     const selectUser = (select: any) =>
       select
@@ -47,6 +48,10 @@ describe('Authentication security', () => {
             : selectUser(select),
         ),
         create: jest.fn(async ({ data, select }: any) => {
+          stored = { ...stored, ...data };
+          return selectUser(select);
+        }),
+        update: jest.fn(async ({ data, select }: any) => {
           stored = { ...stored, ...data };
           return selectUser(select);
         }),
@@ -166,16 +171,39 @@ describe('Authentication security', () => {
     );
   });
 
-  it('never returns a password hash from registration', async () => {
+  it('never returns a password hash from registration and sends 6-digit OTP', async () => {
     db.user.findUnique.mockResolvedValueOnce(null);
     const result = await service.register({
       firstName: 'Test',
       lastName: 'User',
-      email: stored.email,
+      email: 'newuser@example.com',
       phoneNumber: '+8801700000000',
       password: 'New-password123',
     });
     expect(result).not.toHaveProperty('password');
     expect(result).not.toHaveProperty('otp');
+    expect(sendMail).toHaveBeenCalled();
+  });
+
+  it('verifies 6-digit registration OTP, sets verifiedEmail, and issues token', async () => {
+    db.user.findUnique.mockResolvedValueOnce(null);
+    await service.register({
+      firstName: 'Verify',
+      lastName: 'Test',
+      email: stored.email,
+      phoneNumber: '+8801700000000',
+      password: 'New-password123',
+    });
+
+    const html = (sendMail.mock.calls[0][0] as any).html as string;
+    const otp = />\s*(\d{6})\s*</.exec(html)![1];
+
+    const verified = await service.verifyRegistrationOtp({
+      email: stored.email,
+      otp,
+    });
+    expect(verified.user.verifiedEmail).toBe(true);
+    expect(verified.accessToken).toBeDefined();
+    expect(stored.otp).toBeNull();
   });
 });

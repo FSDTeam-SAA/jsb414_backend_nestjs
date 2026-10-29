@@ -6,6 +6,7 @@ import { IFilterParams } from '../../helper/pick';
 import { publicUserSelect } from '../../helper/public-user-select';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateInterestsDto } from './dto/update-interests.dto';
 
 @Injectable()
 export class UserService {
@@ -101,9 +102,62 @@ export class UserService {
       photoUrl = uploadRes.url;
     }
 
-    return this.update(userId, {
-      ...updateUserDto,
-      ...(photoUrl ? { photo: photoUrl } : {}),
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
     });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    }
+
+    if (updateUserDto.email && updateUserDto.email !== user.email) {
+      const existingEmail = await this.prisma.user.findUnique({
+        where: { email: updateUserDto.email },
+      });
+      if (existingEmail) {
+        throw new HttpException('Email already in use', HttpStatus.BAD_REQUEST);
+      }
+    }
+
+    const updateData: Record<string, any> = {};
+    if (updateUserDto.firstName) updateData.firstName = updateUserDto.firstName;
+    if (updateUserDto.lastName) updateData.lastName = updateUserDto.lastName;
+    if (updateUserDto.email) updateData.email = updateUserDto.email;
+    if (updateUserDto.phoneNumber !== undefined)
+      updateData.phoneNumber = updateUserDto.phoneNumber;
+    if (photoUrl) updateData.photo = photoUrl;
+
+    const data = await this.prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: publicUserSelect,
+    });
+    return data;
+  }
+
+  async updateInterests(userId: string, dto: UpdateInterestsDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    }
+
+    const data = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(dto.leadTypes !== undefined && { leadTypes: dto.leadTypes }),
+        ...(dto.interestedStates !== undefined && {
+          interestedStates: dto.interestedStates,
+        }),
+        ...(dto.interestedCities !== undefined && {
+          interestedCities: dto.interestedCities,
+        }),
+      },
+      select: publicUserSelect,
+    });
+
+    return data;
   }
 }

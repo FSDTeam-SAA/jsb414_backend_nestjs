@@ -68,3 +68,24 @@ export class ChangePassword {
   @MaxLength(72)
   newPassword!: string;
 }
+
+export class VerifyRegistrationOtpDto {
+  @ApiProperty({ example: 'user@example.com' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsEmail()
+  @MaxLength(254)
+  email!: string;
+
+  @ApiProperty({ example: '123456' })
+  @IsString()
+  @Matches(/^\d{6}$/, { message: 'OTP must contain exactly 6 digits' })
+  otp!: string;
+}
+
+export class ResendRegistrationOtpDto {
+  @ApiProperty({ example: 'user@example.com' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsEmail()
+  @MaxLength(254)
+  email!: string;
+}

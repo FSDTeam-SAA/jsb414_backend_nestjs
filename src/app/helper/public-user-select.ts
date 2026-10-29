@@ -6,6 +6,10 @@ export const publicUserSelect = {
   phoneNumber: true,
   photo: true,
   role: true,
+  verifiedEmail: true,
+  leadTypes: true,
+  interestedStates: true,
+  interestedCities: true,
   createdAt: true,
   updatedAt: true,
 } as const;

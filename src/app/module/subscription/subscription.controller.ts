@@ -23,6 +23,7 @@ import type { Request } from 'express';
 import pick from '../../helper/pick';
 import { AuthGuard } from '../../middlewares/auth.guard';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
+import { CreateSubscriptionPaymentDto } from './dto/create-subscription-payment.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 import { SubscriptionService } from './subscription.service';
 import { SubscriptionQueryDto } from './dto/subscription-query.dto';
@@ -35,7 +36,7 @@ export class SubscriptionController {
   @Get()
   @ApiBearerAuth('access-token')
   @UseGuards(AuthGuard('admin', 'superadmin'))
-  @ApiOperation({ summary: 'Get all subscription plans' })
+  @ApiOperation({ summary: 'Get all subscription plans (Admin)' })
   @ApiQuery({
     name: 'searchTerm',
     description: 'Search by title, subTitle or currency',
@@ -113,7 +114,7 @@ export class SubscriptionController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create subscription plan' })
+  @ApiOperation({ summary: 'Create subscription plan (Admin)' })
   @ApiBearerAuth('access-token')
   @UseGuards(AuthGuard('admin', 'superadmin'))
   @HttpCode(HttpStatus.CREATED)
@@ -128,11 +129,34 @@ export class SubscriptionController {
   }
 
   @Get('active')
-  @ApiOperation({ summary: 'Get public active plans without admin details' })
+  @ApiOperation({ summary: 'Get public active plans (Free, Silver, Gold, Diamond)' })
   async getActivePlans() {
     return {
       message: 'Active plans fetched successfully',
       data: await this.subscriptionService.getActivePlans(),
+    };
+  }
+
+  @Post('payment')
+  @UseGuards(AuthGuard())
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary:
+      'Select plan & create Stripe checkout URL (Free plan activates immediately)',
+  })
+  @HttpCode(HttpStatus.OK)
+  async createSubscriptionPayment(
+    @Req() req: Request,
+    @Body() dto: CreateSubscriptionPaymentDto,
+  ) {
+    const userId = req.user!.id;
+    const result = await this.subscriptionService.createSubscriptionPayment(
+      userId,
+      dto,
+    );
+    return {
+      message: result.message,
+      data: result,
     };
   }
 

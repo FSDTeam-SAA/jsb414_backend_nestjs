@@ -7,7 +7,6 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
-  Post,
   Query,
   Req,
   UploadedFile,
@@ -26,31 +25,14 @@ import type { Request } from 'express';
 import { fileUpload } from '../../helper/fileUploder';
 import pick from '../../helper/pick';
 import { AuthGuard } from '../../middlewares/auth.guard';
-import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserService } from './user.service';
-import { AuthRateLimitGuard } from '../../middlewares/auth-rate-limit.guard';
 import { UserQueryDto } from './dto/user-query.dto';
 
 @ApiTags('user')
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
-
-  @Post()
-  @UseGuards(AuthRateLimitGuard)
-  @ApiOperation({
-    summary: 'create user',
-  })
-  @HttpCode(HttpStatus.CREATED)
-  async createUser(@Body() createUserDto: CreateUserDto) {
-    const result = await this.userService.createUser(createUserDto);
-
-    return {
-      message: 'create user successfully',
-      data: result,
-    };
-  }
 
   @Get()
   @ApiOperation({

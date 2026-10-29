@@ -1,50 +1,15 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
-
-import bcrypt from 'bcryptjs';
-import config from '../../config';
 import buildWhereConditions from '../../helper/buildWhereConditions';
 import { fileUpload } from '../../helper/fileUploder';
 import paginationHelper, { IOptions } from '../../helper/pagenation';
 import { IFilterParams } from '../../helper/pick';
 import { publicUserSelect } from '../../helper/public-user-select';
-import { validatePasswordBytes } from '../../helper/password';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UserService {
   constructor(private readonly prisma: PrismaService) {}
-
-  async createUser(createUserDto: CreateUserDto) {
-    validatePasswordBytes(createUserDto.password);
-    const user = await this.prisma.user.findUnique({
-      where: {
-        email: createUserDto.email,
-      },
-    });
-
-    if (user)
-      throw new HttpException('user alrady exists', HttpStatus.BAD_REQUEST);
-
-    const hashPassword = await bcrypt.hash(
-      createUserDto.password,
-      Number(config.bcryptSaltRounds) || 10,
-    );
-
-    const result = await this.prisma.user.create({
-      data: {
-        firstName: createUserDto.firstName,
-        lastName: createUserDto.lastName,
-        email: createUserDto.email,
-        password: hashPassword,
-        phoneNumber: createUserDto.phoneNumber,
-      },
-      select: publicUserSelect,
-    });
-
-    return result;
-  }
 
   async getAllUser(params: IFilterParams, options: IOptions) {
     const { page, limit, skip, sortBy, sortOrder } = paginationHelper(options);
@@ -140,18 +105,5 @@ export class UserService {
       ...updateUserDto,
       ...(photoUrl ? { photo: photoUrl } : {}),
     });
-  }
-
-  async updateProfilePhoto(userId: string, file: Express.Multer.File) {
-    if (!file) {
-      throw new HttpException('Photo file is required', HttpStatus.BAD_REQUEST);
-    }
-    const uploadRes = await fileUpload.uploadToCloudinary(file);
-    const updated = await this.prisma.user.update({
-      where: { id: userId },
-      data: { photo: uploadRes.url },
-      select: publicUserSelect,
-    });
-    return updated;
   }
 }

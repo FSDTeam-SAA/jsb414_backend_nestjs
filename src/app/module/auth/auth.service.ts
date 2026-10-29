@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -14,7 +16,13 @@ import { validatePasswordBytes } from '../../helper/password';
 import { publicUserSelect } from '../../helper/public-user-select';
 import sendMailer from '../../helper/sendMailer';
 import { passwordVersion, tokenDurationSeconds } from '../../helper/token';
-import { ChangePassword, CreateAuthDto, LoginAuthDto, ResendRegistrationOtpDto, VerifyRegistrationOtpDto } from './dto/create-auth.dto';
+import {
+  ChangePassword,
+  CreateAuthDto,
+  LoginAuthDto,
+  ResendRegistrationOtpDto,
+  VerifyRegistrationOtpDto,
+} from './dto/create-auth.dto';
 
 interface AuthTokenPayload {
   id: string;
@@ -140,10 +148,7 @@ export class AuthService {
     return user;
   }
 
-  async verifyRegistrationOtp(
-    dto: VerifyRegistrationOtpDto,
-    res?: Response,
-  ) {
+  async verifyRegistrationOtp(dto: VerifyRegistrationOtpDto, res?: Response) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -249,6 +254,12 @@ export class AuthService {
     });
     if (!user || !(await bcrypt.compare(dto.password, user.password))) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+    if (!user.verifiedEmail) {
+      throw new HttpException(
+        'Email is not verified. Please verify your email.',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
     const accessToken = this.signToken(user, 'access');
     const refreshToken = this.signToken(user, 'refresh');
@@ -432,11 +443,17 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
-    const isPasswordValid = await bcrypt.compare(dto.oldPassword, user.password);
+    const isPasswordValid = await bcrypt.compare(
+      dto.oldPassword,
+      user.password,
+    );
     if (!isPasswordValid) {
       throw new BadRequestException('Incorrect current password');
     }
-    const password = await bcrypt.hash(dto.newPassword, config.bcryptSaltRounds);
+    const password = await bcrypt.hash(
+      dto.newPassword,
+      config.bcryptSaltRounds,
+    );
     await this.prisma.user.update({
       where: { id: userId },
       data: { password },

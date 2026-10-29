@@ -18,7 +18,7 @@ export function setupApp(app: INestApplication) {
     res.setHeader('Referrer-Policy', 'no-referrer');
     next();
   });
-  app.enableCors({ origin: config.frontendUrl, credentials: true });
+  app.enableCors({ origin: true, credentials: true });
   app.setGlobalPrefix('api/v1', { exclude: [''] });
   app.useGlobalPipes(
     new ValidationPipe({

@@ -9,11 +9,13 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AuthRateLimitGuard } from '../../middlewares/auth-rate-limit.guard';
+import { AuthGuard } from '../../middlewares/auth.guard';
 import { AuthService } from './auth.service';
 import {
+  ChangePassword,
   CreateAuthDto,
   ForgotPasswordDto,
   LoginAuthDto,
@@ -165,6 +167,26 @@ export class AuthController {
     );
     return {
       message: 'Password reset successfully',
+      data: result,
+    };
+  }
+
+  @ApiOperation({ summary: 'Change password' })
+  @Post('change-password')
+  @UseGuards(AuthGuard())
+  @ApiBearerAuth('access-token')
+  @HttpCode(HttpStatus.OK)
+  async changePassword(
+    @Req() req: Request,
+    @Body() changePasswordDto: ChangePassword,
+  ) {
+    const userId = req.user!.id;
+    const result = await this.authService.changePassword(
+      userId,
+      changePasswordDto,
+    );
+    return {
+      message: 'Password changed successfully',
       data: result,
     };
   }

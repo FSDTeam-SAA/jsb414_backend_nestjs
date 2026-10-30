@@ -1,5 +1,0 @@
-category,propertyType,propertyAddress,city,state,zipcode,estValue,estEquity,mortgageInformation,stage,saleDate,availability,sharedLimit,status,firstName,lastName,phoneNumbers,emailAddresses,propertyImage
-Pre-Foreclosure,Single Family,500 Ocean Drive,Miami Beach,FL,33139,750000,210000,Conventional,Notice of Sale,2026-12-20,SHARED,5,ACTIVE,John,Doe,"(305) 555-1111",john.doe@example.com,https://images.unsplash.com/photo-1580587771525-78b9dba3b914
-Foreclosure Auction,Single Family,123 Incomplete Way,Orlando,FL,32801,420000,110000,FHA Loan,Notice of Default,2026-11-25,EXCLUSIVE,1,ACTIVE,Alex,Smith,,,https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7
-Pre-Foreclosure,Condo,,Tampa,FL,33602,380000,95000,VA Loan,Notice of Trustee Sale,2027-01-10,SHARED,5,ACTIVE,Emma,Watson,"(813) 555-2222",emma.w@example.com,https://images.unsplash.com/photo-1600596542815-ffad4c1539a9
-Pre-Foreclosure,Townhouse,888 Complete Blvd,Fort Lauderdale,FL,33301,620000,180000,Conventional,Lis Pendens,2027-01-15,SHARED,5,ACTIVE,Michael,Brown,"(954) 555-3333",michael.b@example.com,https://images.unsplash.com/photo-1512917774080-9991f1c4c750

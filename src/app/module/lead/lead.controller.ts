@@ -146,7 +146,7 @@ export class LeadController {
   @ApiOperation({
     summary: 'Update a lead with optional property image',
   })
-  @ApiConsumes('application/json', 'multipart/form-data')
+  @ApiConsumes('multipart/form-data')
   @ApiBearerAuth('access-token')
   @UseGuards(AuthGuard('admin', 'superadmin'))
   @UseInterceptors(FileInterceptor('propertyImage', fileUpload.uploadConfig))

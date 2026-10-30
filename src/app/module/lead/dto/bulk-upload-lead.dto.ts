@@ -1,4 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsOptional, IsString } from 'class-validator';
 
 export class BulkUploadLeadDto {
@@ -7,6 +8,7 @@ export class BulkUploadLeadDto {
     format: 'binary',
     description: 'CSV (.csv) or Excel (.xlsx, .xls) file containing leads data',
   })
+  @IsOptional()
   file?: any;
 
   @ApiPropertyOptional({
@@ -14,6 +16,7 @@ export class BulkUploadLeadDto {
     description:
       'Default Category ID to assign if not specified per row in the spreadsheet',
   })
+  @Transform(({ value }) => (value === '' ? undefined : value))
   @IsOptional()
   @IsString()
   defaultCategoryId?: string;

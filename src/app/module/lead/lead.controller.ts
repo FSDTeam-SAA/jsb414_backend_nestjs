@@ -84,7 +84,7 @@ export class LeadController {
     );
 
     return {
-      message: `Bulk import completed: ${result.importedCount} lead(s) imported`,
+      message: `Bulk import completed: ${result.createdCount} created, ${result.updatedCount} updated`,
       data: result,
     };
   }
@@ -99,6 +99,7 @@ export class LeadController {
   @ApiQuery({ name: 'state', required: false, type: 'string' })
   @ApiQuery({ name: 'status', required: false, type: 'string' })
   @ApiQuery({ name: 'availability', required: false, type: 'string' })
+  @ApiQuery({ name: 'classification', required: false, type: 'string' })
   @ApiQuery({ name: 'page', required: false, type: 'number' })
   @ApiQuery({ name: 'limit', required: false, type: 'number' })
   @ApiQuery({ name: 'sortBy', required: false, type: 'string' })
@@ -116,6 +117,7 @@ export class LeadController {
       'availability',
       'source',
       'propertyType',
+      'classification',
     ]);
     const options = pick(req.query, ['page', 'limit', 'sortBy', 'sortOrder']);
     const result = await this.leadService.getAllLeads(filters, options);

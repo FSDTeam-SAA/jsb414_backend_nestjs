@@ -30,7 +30,7 @@ describe('Authentication security', () => {
       otp: null,
       otpExpiry: null,
       verifiedForget: false,
-      verifiedEmail: false,
+      verifiedEmail: true,
     };
     const selectUser = (select: any) =>
       select

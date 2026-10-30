@@ -50,7 +50,7 @@ export class LeadService {
       (createLeadDto.emailAddresses && createLeadDto.emailAddresses.length > 0),
     );
     const classification =
-      hasAddress && hasContact ? 'SELLABLE' : 'NEEDS_ENRICHMENT';
+      hasAddress && hasContact ? 'SELLABLE' : 'NEEDS_REVIEW';
 
     const lead = await this.prisma.lead.create({
       data: {
@@ -331,7 +331,7 @@ export class LeadService {
     });
   }
 
-  // 6. বাল্ক আপলোড
+  // 6. বাল্ক আপলোড (সহজ, পরিষ্কার ও আপসার্ট লজিক)
   async bulkUploadLeads(
     file: Express.Multer.File,
     adminId: string,
@@ -346,6 +346,7 @@ export class LeadService {
       throw new BadRequestException('The uploaded file contains no data rows');
     }
 
+    // ১. বিদ্যমান ক্যাটাগরিগুলো লোড করা
     const allCategories = await this.prisma.catagorie.findMany({
       select: { id: true, name: true },
     });
@@ -356,13 +357,55 @@ export class LeadService {
       categoryMapByName.set(cat.name.trim().toLowerCase(), cat.id);
     }
 
-    const leadsToCreate: any[] = [];
+    // ২. ডুপ্লিকেট চেকের জন্য ফাইলের ঠিকানাগুলো সংগ্রহ করা
+    const addressList: string[] = [];
+    for (const row of rows) {
+      const addr = this.getFieldValue(row, [
+        'propertyaddress',
+        'property_address',
+        'address',
+        'street',
+      ]);
+      if (addr) addressList.push(addr);
+    }
+
+    // ডেটাবেজে ইতিমধ্যে থাকা একই ঠিকানার লিড খুঁজে বের করা
+    const existingLeads = await this.prisma.lead.findMany({
+      where: {
+        propertyAddress: { in: addressList },
+      },
+      select: {
+        id: true,
+        propertyAddress: true,
+        zipcode: true,
+      },
+    });
+
+    const normalizeKey = (address?: string | null, zip?: string | null) =>
+      `${(address || '').trim().toLowerCase()}_${(zip || '').trim().toLowerCase()}`;
+
+    const existingLeadMap = new Map<string, string>();
+    for (const lead of existingLeads) {
+      if (lead.propertyAddress) {
+        existingLeadMap.set(
+          normalizeKey(lead.propertyAddress, lead.zipcode),
+          lead.id,
+        );
+      }
+    }
+
+    let createdCount = 0;
+    let updatedCount = 0;
+    let sellableCount = 0;
+    let needsReviewCount = 0;
     const errors: Array<{ row: number; error: string }> = [];
 
+    // ৩. প্রতিটি রো প্রসেস করা
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const rowNum = i + 2;
 
+      // ক. ক্যাটাগরি ম্যাচিং (Case-insensitive)
       let categoryId =
         this.getFieldValue(row, ['categoryid', 'category_id', 'category']) ||
         defaultCategoryId;
@@ -374,14 +417,38 @@ export class LeadService {
         }
       }
 
+      // যদি ফাইলে নতুন কোনো ক্যাটাগরির নাম থাকে, অটো-ক্রিয়েট করবে যাতে এরর না খায়
       if (!categoryId || !categoryIdSet.has(categoryId)) {
-        errors.push({
-          row: rowNum,
-          error: `Invalid or missing category '${categoryId || 'N/A'}'. Provide a valid category ID/name or pass defaultCategoryId.`,
-        });
-        continue;
+        const rawCatName = this.getFieldValue(row, [
+          'categoryid',
+          'category_id',
+          'category',
+        ]);
+        if (rawCatName && rawCatName.trim()) {
+          const newCat = await this.prisma.catagorie.create({
+            data: {
+              name: rawCatName.trim(),
+              description: `${rawCatName.trim()} Leads`,
+              sharedBasePrice: 25,
+              exclusiveBasePrice: 75,
+              isActive: true,
+            },
+          });
+          categoryId = newCat.id;
+          categoryIdSet.add(newCat.id);
+          categoryMapByName.set(rawCatName.trim().toLowerCase(), newCat.id);
+        } else if (defaultCategoryId && categoryIdSet.has(defaultCategoryId)) {
+          categoryId = defaultCategoryId;
+        } else {
+          errors.push({
+            row: rowNum,
+            error: `Row ${rowNum}: Category '${categoryId || 'N/A'}' not found. Please provide a category or defaultCategoryId.`,
+          });
+          continue;
+        }
       }
 
+      // খ. ফিল্ডগুলো রিড করা
       const rawSaleDate = this.getFieldValue(row, [
         'saledate',
         'sale_date',
@@ -435,9 +502,17 @@ export class LeadService {
         'address',
         'street',
       ]);
+      const unitNumber = this.getFieldValue(row, [
+        'unitnumber',
+        'unit_number',
+        'unit',
+        'apt',
+      ]);
       const city = this.getFieldValue(row, ['city']);
       const state = this.getFieldValue(row, ['state']);
       const zipcode = this.getFieldValue(row, ['zipcode', 'zip', 'postalcode']);
+      const county = this.getFieldValue(row, ['county']);
+
       const estValue = this.parseNumber(
         this.getFieldValue(row, [
           'estvalue',
@@ -454,6 +529,14 @@ export class LeadService {
           'estimatedequity',
         ]),
       );
+      const mortgageBalance = this.parseNumber(
+        this.getFieldValue(row, [
+          'mortgagebalance',
+          'mortgage_balance',
+          'loanbalance',
+        ]),
+      );
+
       const firstName = this.getFieldValue(row, ['firstname', 'first_name']);
       const lastName = this.getFieldValue(row, ['lastname', 'last_name']);
       const propertyImage = this.getFieldValue(row, [
@@ -481,9 +564,24 @@ export class LeadService {
       ]);
       const emailAddresses = this.parseStringArray(rawEmails);
 
-      leadsToCreate.push({
+      // গ. ক্লাসিফিকেশন যাচাই (ঠিকানা + ফোন/ইমেইল থাকলে SELLABLE, না থাকলে NEEDS_REVIEW)
+      const hasAddress = Boolean(propertyAddress && city && state);
+      const hasContact = Boolean(
+        (phoneNumbers && phoneNumbers.length > 0) ||
+        (emailAddresses && emailAddresses.length > 0),
+      );
+      const classification =
+        hasAddress && hasContact ? 'SELLABLE' : 'NEEDS_REVIEW';
+
+      if (classification === 'SELLABLE') {
+        sellableCount++;
+      } else {
+        needsReviewCount++;
+      }
+
+      // ঘ. লিডের অবজেক্ট তৈরি
+      const leadPayload = {
         categoryId,
-        adminId,
         saleDate,
         stage,
         mortgageInformation,
@@ -494,32 +592,61 @@ export class LeadService {
         propertyImage,
         propertyType,
         propertyAddress,
+        unitNumber,
         city,
         state,
         zipcode,
+        county,
         estValue: estValue ? Math.round(estValue) : undefined,
         estEquity: estEquity ? Math.round(estEquity) : undefined,
+        mortgageBalance: mortgageBalance
+          ? Math.round(mortgageBalance)
+          : undefined,
         firstName,
         lastName,
         phoneNumbers,
         emailAddresses,
-      });
+        classification,
+        lastImportedAt: new Date(),
+      };
+
+      // ঙ. ডুপ্লিকেট চেক (ঠিকানা ও জিপকোড মিললে আপডেট, না মিললে নতুন তৈরি)
+      const leadKey = normalizeKey(propertyAddress, zipcode);
+      const existingId = propertyAddress ? existingLeadMap.get(leadKey) : null;
+
+      if (existingId) {
+        await this.prisma.lead.update({
+          where: { id: existingId },
+          data: leadPayload,
+        });
+        updatedCount++;
+      } else {
+        const created = await this.prisma.lead.create({
+          data: {
+            ...leadPayload,
+            adminId,
+          },
+        });
+        if (propertyAddress) {
+          existingLeadMap.set(leadKey, created.id);
+        }
+        createdCount++;
+      }
     }
 
-    if (leadsToCreate.length === 0) {
+    if (createdCount === 0 && updatedCount === 0) {
       throw new BadRequestException({
-        message: 'No valid leads could be imported from the file',
+        message: 'No leads could be imported from the file',
         errors,
       });
     }
 
-    const createdCount = await this.prisma.lead.createMany({
-      data: leadsToCreate,
-    });
-
     return {
       totalRows: rows.length,
-      importedCount: createdCount.count,
+      createdCount,
+      updatedCount,
+      sellableCount,
+      needsReviewCount,
       failedCount: errors.length,
       errors: errors.slice(0, 50),
     };

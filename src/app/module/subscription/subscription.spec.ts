@@ -53,6 +53,8 @@ describe('Subscription Service - Checkout URL & Free Activation', () => {
           id: 'pay_1',
           ...data,
         })),
+        findMany: jest.fn(),
+        count: jest.fn(),
       },
       $transaction: jest.fn(async (cb: any) => cb(db)),
     };
@@ -106,5 +108,142 @@ describe('Subscription Service - Checkout URL & Free Activation', () => {
         }),
       }),
     );
+  });
+
+  describe('recentSubscribeTionUser', () => {
+    it('fetches paginated recent subscribers with default options', async () => {
+      const mockPayments = [
+        {
+          id: 'pay_sub_1',
+          amount: '49.00',
+          currency: 'USD',
+          status: 'COMPLETED',
+          paymentType: 'SUBSCRIPTION',
+          stripeSessionId: 'cs_123',
+          receiptUrl: null,
+          createdAt: new Date('2026-10-31T10:00:00Z'),
+          updatedAt: new Date('2026-10-31T10:05:00Z'),
+          user: {
+            id: 'u1',
+            firstName: 'John',
+            lastName: 'Doe',
+            email: 'john@example.com',
+            phoneNumber: '+1234567890',
+            photo: null,
+            role: 'user',
+            walletBalance: '10.00',
+            userSubscribes: [
+              {
+                id: 'us_1',
+                status: 'ACTIVE',
+                startDate: new Date('2026-10-31'),
+                endDate: new Date('2026-11-30'),
+              },
+            ],
+          },
+          subscribe: {
+            id: 'sub_silver',
+            title: 'Silver',
+            subTitle: 'Silver Plan',
+            price: '49.00',
+            discount: 5,
+            currency: 'USD',
+            leadAccessLimit: 100,
+            features: ['Feature 1'],
+          },
+        },
+      ];
+
+      db.payment.findMany.mockResolvedValueOnce(mockPayments);
+      db.payment.count.mockResolvedValueOnce(1);
+
+      const result = await service.recentSubscribeTionUser({}, { page: 1, limit: 10 });
+
+      expect(db.payment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([{ paymentType: 'SUBSCRIPTION' }]),
+          }),
+          skip: 0,
+          take: 10,
+          orderBy: { createdAt: 'desc' },
+        }),
+      );
+
+      expect(result.meta).toEqual({
+        page: 1,
+        limit: 10,
+        total: 1,
+      });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toEqual({
+        id: 'pay_sub_1',
+        amount: 49,
+        currency: 'USD',
+        status: 'COMPLETED',
+        paymentType: 'SUBSCRIPTION',
+        stripeSessionId: 'cs_123',
+        receiptUrl: null,
+        createdAt: expect.any(Date),
+        updatedAt: expect.any(Date),
+        user: {
+          id: 'u1',
+          firstName: 'John',
+          lastName: 'Doe',
+          email: 'john@example.com',
+          phoneNumber: '+1234567890',
+          photo: null,
+          walletBalance: 10,
+        },
+        plan: {
+          id: 'sub_silver',
+          title: 'Silver',
+          subTitle: 'Silver Plan',
+          price: 49,
+          discount: 5,
+          currency: 'USD',
+        },
+        activeSubscription: {
+          id: 'us_1',
+          status: 'ACTIVE',
+          startDate: expect.any(Date),
+          endDate: expect.any(Date),
+        },
+      });
+    });
+
+    it('applies searchTerm and status filters', async () => {
+      db.payment.findMany.mockResolvedValueOnce([]);
+      db.payment.count.mockResolvedValueOnce(0);
+
+      await service.recentSubscribeTionUser(
+        {
+          searchTerm: 'gold',
+          status: 'COMPLETED' as any,
+        },
+        { page: 2, limit: 5 },
+      );
+
+      expect(db.payment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              { paymentType: 'SUBSCRIPTION' },
+              expect.objectContaining({
+                AND: expect.arrayContaining([{ status: 'COMPLETED' }]),
+              }),
+              expect.objectContaining({
+                OR: expect.arrayContaining([
+                  { subscribe: { title: { contains: 'gold', mode: 'insensitive' } } },
+                ]),
+              }),
+            ]),
+          }),
+          skip: 5,
+          take: 5,
+        }),
+      );
+    });
   });
 });

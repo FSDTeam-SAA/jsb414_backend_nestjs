@@ -6,13 +6,13 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import Stripe from 'stripe';
+import { PrismaService } from '../../../prisma/prisma.service';
+import config from '../../config';
 import buildWhereConditions from '../../helper/buildWhereConditions';
 import paginationHelper, { IOptions } from '../../helper/pagenation';
 import { IFilterParams } from '../../helper/pick';
-import { PrismaService } from '../../../prisma/prisma.service';
-import config from '../../config';
-import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { CreateSubscriptionPaymentDto } from './dto/create-subscription-payment.dto';
+import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 
 @Injectable()
@@ -301,6 +301,69 @@ export class SubscriptionService {
         price: priceNum,
         discount: plan.discount,
       },
+    };
+  }
+
+  async recentSubscribeTionUser(params: IFilterParams, options: IOptions = {}) {
+    const { limit, page, skip, sortBy, sortOrder } = paginationHelper(options);
+
+    const whenCondition: any = buildWhereConditions(params, ['receiptUrl'], {
+      paymentType: 'SUBSCRIPTION',
+    });
+
+    const [payments, total] = await Promise.all([
+      this.prisma.payment.findMany({
+        where: whenCondition,
+        skip,
+        take: limit,
+        orderBy: {
+          [sortBy]: sortOrder,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phoneNumber: true,
+              photo: true,
+              role: true,
+              walletBalance: true,
+              userSubscribes: {
+                where: { status: 'ACTIVE' },
+                select: {
+                  id: true,
+                  status: true,
+                  startDate: true,
+                  endDate: true,
+                },
+                take: 1,
+              },
+            },
+          },
+          subscribe: {
+            select: {
+              id: true,
+              title: true,
+              subTitle: true,
+              price: true,
+              discount: true,
+              currency: true,
+            },
+          },
+        },
+      }),
+      this.prisma.payment.count({ where: whenCondition }),
+    ]);
+
+    return {
+      meta: {
+        page,
+        limit,
+        total,
+      },
+      data: payments,
     };
   }
 }

@@ -22,11 +22,11 @@ import {
 import type { Request } from 'express';
 import pick from '../../helper/pick';
 import { AuthGuard } from '../../middlewares/auth.guard';
-import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { CreateSubscriptionPaymentDto } from './dto/create-subscription-payment.dto';
+import { CreateSubscriptionDto } from './dto/create-subscription.dto';
+import { SubscriptionQueryDto } from './dto/subscription-query.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 import { SubscriptionService } from './subscription.service';
-import { SubscriptionQueryDto } from './dto/subscription-query.dto';
 
 @ApiTags('Subscription')
 @Controller('subscription')
@@ -129,7 +129,9 @@ export class SubscriptionController {
   }
 
   @Get('active')
-  @ApiOperation({ summary: 'Get public active plans (Free, Silver, Gold, Diamond)' })
+  @ApiOperation({
+    summary: 'Get public active plans (Free, Silver, Gold, Diamond)',
+  })
   async getActivePlans() {
     return {
       message: 'Active plans fetched successfully',
@@ -157,6 +159,84 @@ export class SubscriptionController {
     return {
       message: result.message,
       data: result,
+    };
+  }
+
+  @Get('recent-users')
+  @ApiBearerAuth('access-token')
+  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @ApiOperation({
+    summary: 'Get recent subscribed users (Admin)',
+    description:
+      'Fetches recent subscription payment transactions with user profiles and subscription plan details.',
+  })
+  @ApiQuery({
+    name: 'searchTerm',
+    description: 'Search by user name, email or phone',
+    required: false,
+    type: String,
+  })
+  @ApiQuery({
+    name: 'status',
+    description: 'Filter by status',
+    required: false,
+    type: String,
+  })
+  @ApiQuery({
+    name: 'subscribeId',
+    description: 'Filter by subscription plan ID',
+    required: false,
+    type: String,
+  })
+  @ApiQuery({
+    name: 'paymentType',
+    description: 'Filter by payment type',
+    required: false,
+    type: String,
+  })
+  @ApiQuery({
+    name: 'page',
+    description: 'Page number',
+    required: false,
+    type: String,
+  })
+  @ApiQuery({
+    name: 'limit',
+    description: 'Limit per page',
+    required: false,
+    type: String,
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    description: 'Sort by field',
+    required: false,
+    type: String,
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    description: 'Sort order',
+    required: false,
+    type: String,
+  })
+  @HttpCode(HttpStatus.OK)
+  async recentSubscribeTionUser(@Req() req: Request) {
+    const filters = pick(req.query, [
+      'searchTerm',
+      'status',
+      'subscribeId',
+      'paymentType',
+      'receiptUrl',
+    ]);
+    const options = pick(req.query, ['page', 'limit', 'sortBy', 'sortOrder']);
+    const result = await this.subscriptionService.recentSubscribeTionUser(
+      filters,
+      options,
+    );
+
+    return {
+      message: 'Recent subscription users fetched successfully',
+      meta: result.meta,
+      data: result.data,
     };
   }
 

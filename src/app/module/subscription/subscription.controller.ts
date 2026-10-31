@@ -162,6 +162,23 @@ export class SubscriptionController {
     };
   }
 
+  @Get('overview')
+  @ApiBearerAuth('access-token')
+  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @ApiOperation({
+    summary: 'Get subscription dashboard overview metrics (Admin)',
+    description:
+      'Fetches active paid members count, silver/gold/diamond members count, and total/tier-wise subscription revenues.',
+  })
+  @HttpCode(HttpStatus.OK)
+  async subscripeOverview() {
+    const result = await this.subscriptionService.subscripeOverview();
+    return {
+      message: 'Subscription overview fetched successfully',
+      data: result,
+    };
+  }
+
   @Get('recent-users')
   @ApiBearerAuth('access-token')
   @UseGuards(AuthGuard('admin', 'superadmin'))

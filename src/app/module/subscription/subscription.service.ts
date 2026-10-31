@@ -366,4 +366,115 @@ export class SubscriptionService {
       data: payments,
     };
   }
+
+  async subscripeOverview() {
+    const [
+      activePadTotalUser,
+      silverTotalMember,
+      goldTotalMemeber,
+      diamonTotalMember,
+      totalRevenueAgg,
+      silverRevenueAgg,
+      goldRevenueAgg,
+      diamondRevenueAgg,
+    ] = await Promise.all([
+      this.prisma.userSubscribe.count({
+        where: {
+          status: 'ACTIVE',
+          subscribe: {
+            price: { gt: 0 },
+          },
+        },
+      }),
+      this.prisma.userSubscribe.count({
+        where: {
+          status: 'ACTIVE',
+          subscribe: {
+            title: { contains: 'silver', mode: 'insensitive' },
+          },
+        },
+      }),
+      this.prisma.userSubscribe.count({
+        where: {
+          status: 'ACTIVE',
+          subscribe: {
+            title: { contains: 'gold', mode: 'insensitive' },
+          },
+        },
+      }),
+      this.prisma.userSubscribe.count({
+        where: {
+          status: 'ACTIVE',
+          subscribe: {
+            title: { contains: 'diamond', mode: 'insensitive' },
+          },
+        },
+      }),
+      this.prisma.payment.aggregate({
+        where: {
+          paymentType: 'SUBSCRIPTION',
+          status: 'COMPLETED',
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+      this.prisma.payment.aggregate({
+        where: {
+          paymentType: 'SUBSCRIPTION',
+          status: 'COMPLETED',
+          subscribe: {
+            title: { contains: 'silver', mode: 'insensitive' },
+          },
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+      this.prisma.payment.aggregate({
+        where: {
+          paymentType: 'SUBSCRIPTION',
+          status: 'COMPLETED',
+          subscribe: {
+            title: { contains: 'gold', mode: 'insensitive' },
+          },
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+      this.prisma.payment.aggregate({
+        where: {
+          paymentType: 'SUBSCRIPTION',
+          status: 'COMPLETED',
+          subscribe: {
+            title: { contains: 'diamond', mode: 'insensitive' },
+          },
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+    ]);
+
+    const totalMemeberSubscribeRevenue = Number(
+      totalRevenueAgg._sum.amount || 0,
+    );
+    const silverPlanReveniy = Number(silverRevenueAgg._sum.amount || 0);
+    const goldPlanReveniy = Number(goldRevenueAgg._sum.amount || 0);
+    const diamonPlanReveniy = Number(diamondRevenueAgg._sum.amount || 0);
+
+    return {
+      // Clean camelCase aliases
+      activePaidTotalUser: activePadTotalUser,
+      silverTotalMember: silverTotalMember,
+      goldTotalMember: goldTotalMemeber,
+      diamondTotalMember: diamonTotalMember,
+      
+      totalMemberSubscribeRevenue: totalMemeberSubscribeRevenue,
+      silverPlanRevenue: silverPlanReveniy,
+      goldPlanRevenue: goldPlanReveniy,
+      diamondPlanRevenue: diamonPlanReveniy,
+    };
+  }
 }

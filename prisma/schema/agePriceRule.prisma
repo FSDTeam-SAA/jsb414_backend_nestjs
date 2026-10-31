@@ -1,19 +1,11 @@
 model AgePriceRule {
   id String @id @default(uuid())
 
-  // ঐচ্ছিক ক্যাটাগরি: নাল থাকলে গ্লোবাল রুল হিসেবে কাজ করবে
-  categoryId String?
-  category   Catagorie? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-
   minDays Int
   maxDays Int? // null মানে কোনো ঊর্ধ্বসীমা নেই (যেমন: ৯১+ দিন)
 
   // বয়সভিত্তিক ডিসকাউন্ট পার্সেন্টেজ (যেমন: ১৫ মানে ১৫% ছাড়)
   discountPercent Int @default(0)
-
-  // ঐচ্ছিক লেগাসি ফিল্ড
-  priceType PriceType?
-  price     Decimal?    @db.Decimal(14, 2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -12,8 +12,6 @@ export interface IPriceCalculationParams {
     minDays: number;
     maxDays?: number | null;
     discountPercent?: number | null;
-    priceType?: 'SHARED' | 'EXCLUSIVE' | null;
-    price?: DollarValue | null;
   }>;
   userDiscountPercent?: number;
 }

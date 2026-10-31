@@ -23,7 +23,7 @@ export class CardService {
         id: addToCartDto.leadId,
       },
       include: {
-        category: { include: { agePriceRules: true } },
+        category: true,
       },
     });
     if (
@@ -71,16 +71,9 @@ export class CardService {
       }
     }
 
-    let globalRules: any[] = [];
-    if (
-      !lead.category.agePriceRules ||
-      lead.category.agePriceRules.length === 0
-    ) {
-      globalRules = await this.prisma.agePriceRule.findMany({
-        where: { categoryId: null },
-        orderBy: { minDays: 'asc' },
-      });
-    }
+    const globalRules = await this.prisma.agePriceRule.findMany({
+      orderBy: { minDays: 'asc' },
+    });
 
     const selectedPrices = this.leadPrices(lead, 0, globalRules);
     const selectedPrice =
@@ -273,7 +266,6 @@ export class CardService {
         select: { walletBalance: true },
       }),
       this.prisma.agePriceRule.findMany({
-        where: { categoryId: null },
         orderBy: { minDays: 'asc' },
       }),
       this.currentMembership(userId),
@@ -281,7 +273,7 @@ export class CardService {
         where: { userId },
         orderBy: { createdAt: 'desc' },
         include: {
-          lead: { include: { category: { include: { agePriceRules: true } } } },
+          lead: { include: { category: true } },
         },
       }),
     ]);
@@ -368,16 +360,11 @@ export class CardService {
   }
 
   private leadPrices(lead: any, discountPercent: number, globalRules: any[] = []) {
-    const rules =
-      lead.category.agePriceRules && lead.category.agePriceRules.length > 0
-        ? lead.category.agePriceRules
-        : globalRules;
-
     return calculateDynamicLeadPrice({
       categorySharedBasePrice: lead.category.sharedBasePrice,
       categoryExclusiveBasePrice: lead.category.exclusiveBasePrice,
       agePricingEnabled: lead.category.agePricingEnabled,
-      agePriceRules: rules,
+      agePriceRules: globalRules,
       ageInDays: inventoryAge(lead.createdAt),
       userDiscountPercent: discountPercent,
     });

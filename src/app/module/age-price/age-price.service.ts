@@ -1,3 +1,4 @@
+/* eslint-disable no-useless-assignment */
 import {
   BadRequestException,
   ConflictException,
@@ -5,7 +6,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { PriceType } from '../../../../prisma/generated/prisma/enums';
 import { CreateAgePriceDto } from './dto/create-age-price.dto';
 import { UpdateAgePriceDto } from './dto/update-age-price.dto';
 
@@ -13,10 +13,8 @@ import { UpdateAgePriceDto } from './dto/update-age-price.dto';
 export class AgePriceService {
   constructor(private readonly prisma: PrismaService) {}
 
-
+  // বয়সের রেঞ্জ ওভারল্যাপ চেক করা (একটি রেঞ্জের ওপর যেন আরেকটি রেঞ্জ ওভারল্যাপ না করে)
   private async checkOverlap(
-    categoryId: string,
-    priceType: PriceType,
     minDays: number,
     maxDays?: number | null,
     excludeRuleId?: string,
@@ -29,21 +27,18 @@ export class AgePriceService {
 
     const existingRules = await this.prisma.agePriceRule.findMany({
       where: {
-        categoryId,
-        priceType,
         ...(excludeRuleId ? { id: { not: excludeRuleId } } : {}),
       },
     });
+
     for (const rule of existingRules) {
       const existingMin = rule.minDays;
       const existingMax = rule.maxDays;
 
-      // eslint-disable-next-line no-useless-assignment
       let isOverlapping = false;
       if (maxDays === null || maxDays === undefined) {
-        // নতুন রুলের কোনো ঊর্ধ্বসীমা নেই (e.g. 91+)
         if (existingMax === null) {
-          isOverlapping = true; 
+          isOverlapping = true;
         } else {
           isOverlapping = existingMax >= minDays;
         }
@@ -54,75 +49,48 @@ export class AgePriceService {
           isOverlapping = minDays <= existingMax && maxDays >= existingMin;
         }
       }
+
       if (isOverlapping) {
         const rangeText =
           existingMax === null
             ? `${existingMin}+`
             : `${existingMin}-${existingMax}`;
         throw new ConflictException(
-          `This age range overlaps with an existing ${priceType} rule: [${rangeText} days] for this category`,
+          `This age range overlaps with an existing rule: [${rangeText} days]`,
         );
       }
     }
   }
 
+  // ১. বয়সভিত্তিক ডিসকাউন্ট রুল তৈরি করা
   async createAgePrice(createAgePriceDto: CreateAgePriceDto) {
-    const category = await this.prisma.catagorie.findUnique({
-      where: {
-        id: createAgePriceDto.categoryId,
-      },
-    });
-    if (!category) {
-      throw new BadRequestException('Category not found');
-    }
     await this.checkOverlap(
-      createAgePriceDto.categoryId,
-      createAgePriceDto.priceType,
       createAgePriceDto.minDays,
       createAgePriceDto.maxDays,
     );
 
     const result = await this.prisma.agePriceRule.create({
       data: {
-        categoryId: createAgePriceDto.categoryId,
-        priceType: createAgePriceDto.priceType,
         minDays: createAgePriceDto.minDays,
         maxDays: createAgePriceDto.maxDays ?? null,
-        price: createAgePriceDto.price,
-      },
-      include: {
-        category: {
-          select: { id: true, name: true },
-        },
+        discountPercent: createAgePriceDto.discountPercent,
       },
     });
 
     return result;
   }
 
-  async findAllAgePrice(categoryId?: string, priceType?: PriceType) {
+  // ২. সকল বয়সভিত্তিক রুল দেখা
+  async findAllAgePrice() {
     return this.prisma.agePriceRule.findMany({
-      where: {
-        ...(categoryId ? { categoryId } : {}),
-        ...(priceType ? { priceType } : {}),
-      },
-      orderBy: [{ priceType: 'asc' }, { minDays: 'asc' }],
-      include: {
-        category: {
-          select: { id: true, name: true },
-        },
-      },
+      orderBy: { minDays: 'asc' },
     });
   }
 
+  // ৩. নির্দিষ্ট একটি রুল দেখা
   async findOne(id: string) {
     const rule = await this.prisma.agePriceRule.findUnique({
       where: { id },
-      include: {
-        category: {
-          select: { id: true, name: true },
-        },
-      },
     });
     if (!rule) {
       throw new NotFoundException(`Age price rule with ID ${id} not found`);
@@ -130,50 +98,43 @@ export class AgePriceService {
     return rule;
   }
 
+  // ৪. রুল আপডেট করা
   async update(id: string, dto: UpdateAgePriceDto) {
     const existingRule = await this.findOne(id);
-    const categoryId = dto.categoryId ?? existingRule.categoryId;
-    const priceType = dto.priceType ?? existingRule.priceType;
     const minDays = dto.minDays ?? existingRule.minDays;
     const maxDays =
       dto.maxDays !== undefined ? dto.maxDays : existingRule.maxDays;
-    await this.checkOverlap(categoryId, priceType, minDays, maxDays, id);
+
+    await this.checkOverlap(minDays, maxDays, id);
+
     return this.prisma.agePriceRule.update({
       where: { id },
       data: {
-        ...(dto.categoryId ? { categoryId: dto.categoryId } : {}),
-        ...(dto.priceType ? { priceType: dto.priceType } : {}),
-        ...(dto.minDays !== undefined ? { minDays: dto.minDays } : {}),
-        ...(dto.maxDays !== undefined ? { maxDays: dto.maxDays } : {}),
-        ...(dto.price !== undefined ? { price: dto.price } : {}),
-      },
-      include: {
-        category: {
-          select: { id: true, name: true },
-        },
+        ...(dto.minDays !== undefined && { minDays: dto.minDays }),
+        ...(dto.maxDays !== undefined && { maxDays: dto.maxDays }),
+        ...(dto.discountPercent !== undefined && {
+          discountPercent: dto.discountPercent,
+        }),
       },
     });
   }
 
+  // ৫. রুল মুছে ফেলা
   async remove(id: string) {
     await this.findOne(id);
     await this.prisma.agePriceRule.delete({ where: { id } });
     return { message: 'Age price rule deleted successfully' };
   }
 
-  async getMatchingPrice(
-    categoryId: string,
-    priceType: PriceType,
-    ageInDays: number,
-  ): Promise<number | null> {
+  // নির্দিষ্ট বয়স অনুযায়ী ডিসকাউন্ট পার্সেন্টেজ বের করা
+  async getMatchingDiscountPercent(ageInDays: number): Promise<number> {
     const matchingRule = await this.prisma.agePriceRule.findFirst({
       where: {
-        categoryId,
-        priceType,
         minDays: { lte: ageInDays },
         OR: [{ maxDays: { gte: ageInDays } }, { maxDays: null }],
       },
     });
-    return matchingRule ? matchingRule.price.toNumber() : null;
+
+    return matchingRule?.discountPercent ?? 0;
   }
 }

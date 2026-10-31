@@ -1,15 +1,11 @@
 model AgePriceRule {
   id String @id @default(uuid())
 
-  categoryId String
-  category   Catagorie @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-
-  priceType PriceType
-
   minDays Int
-  maxDays Int?
+  maxDays Int? // null মানে কোনো ঊর্ধ্বসীমা নেই (যেমন: ৯১+ দিন)
 
-  price Decimal @db.Decimal(14, 2)
+  // বয়সভিত্তিক ডিসকাউন্ট পার্সেন্টেজ (যেমন: ১৫ মানে ১৫% ছাড়)
+  discountPercent Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

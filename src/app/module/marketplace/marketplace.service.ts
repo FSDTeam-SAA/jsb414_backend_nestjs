@@ -66,7 +66,10 @@ export class MarketplaceService {
       this.availableLeadConditions(userId),
     );
 
-    const [data, total] = await Promise.all([
+    const [globalRules, data, total] = await Promise.all([
+      this.prisma.agePriceRule.findMany({
+        orderBy: { minDays: 'asc' },
+      }),
       this.prisma.lead.findMany({
         where: whereConditions,
         select: {
@@ -94,7 +97,6 @@ export class MarketplaceService {
               sharedBasePrice: true,
               exclusiveBasePrice: true,
               agePricingEnabled: true,
-              agePriceRules: true,
             },
           },
         },
@@ -116,17 +118,17 @@ export class MarketplaceService {
         total,
         totalPage: Math.ceil(total / limit),
       },
-      data: data.map((lead) => this.withPrices(lead, discountPercent)),
+      data: data.map((lead) => this.withPrices(lead, discountPercent, globalRules)),
     };
   }
 
   // 2. ড্রয়ার প্রিভিউ-এর জন্য সিঙ্গেল লিড প্রিভিউ (মাস্কড ডেটা সহ)
-  private withPrices(lead: any, discountPercent = 0) {
+  private withPrices(lead: any, discountPercent = 0, globalRules: any[] = []) {
     const prices = calculateDynamicLeadPrice({
       categorySharedBasePrice: lead.category.sharedBasePrice,
       categoryExclusiveBasePrice: lead.category.exclusiveBasePrice,
       agePricingEnabled: lead.category.agePricingEnabled,
-      agePriceRules: lead.category.agePriceRules,
+      agePriceRules: globalRules,
       ageInDays: inventoryAge(lead.createdAt),
       userDiscountPercent: discountPercent,
     });
@@ -143,6 +145,7 @@ export class MarketplaceService {
         lead.availability === 'SHARED' ? null : prices.finalExclusive,
       currency: 'USD',
       appliedDiscountPercent: discountPercent,
+      appliedAgeDiscountPercent: prices.appliedAgeDiscountPercent,
     };
   }
 
@@ -182,7 +185,6 @@ export class MarketplaceService {
             sharedBasePrice: true,
             exclusiveBasePrice: true,
             agePricingEnabled: true,
-            agePriceRules: true,
           },
         },
       },
@@ -216,8 +218,12 @@ export class MarketplaceService {
     const { firstName, lastName, phoneNumbers, emailAddresses, ...safeLead } =
       lead;
 
+    const globalRules = await this.prisma.agePriceRule.findMany({
+      orderBy: { minDays: 'asc' },
+    });
+
     return {
-      ...this.withPrices(safeLead, discountPercent),
+      ...this.withPrices(safeLead, discountPercent, globalRules),
       ownerName: maskedOwner,
       streetAddress: 'Hidden Until Purchase',
       maskedPhones,

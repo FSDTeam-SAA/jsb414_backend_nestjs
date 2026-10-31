@@ -129,6 +129,21 @@ export class LeadController {
     };
   }
 
+  @Get('/lead-overview')
+  @ApiOperation({
+    summary: 'Lead overview',
+  })
+  @ApiBearerAuth('access-token')
+  @UseGuards(AuthGuard('superadmin', 'admin'))
+  @HttpCode(HttpStatus.OK)
+  async leadOverview() {
+    const result = await this.leadService.leadOverview();
+    return {
+      message: 'Lead overview',
+      data: result,
+    };
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get a single lead by ID',

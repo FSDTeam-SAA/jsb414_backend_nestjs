@@ -738,4 +738,28 @@ export class LeadService {
       .map((s) => s.trim())
       .filter(Boolean);
   }
+
+  async leadOverview() {
+    const totalLead = await this.prisma.lead.count();
+    const totalActiveLead = await this.prisma.lead.count({
+      where: { status: 'ACTIVE' },
+    });
+    const shareAvailable = await this.prisma.lead.count({
+      where: {
+        availability: 'SHARED',
+      },
+    });
+    const exclusiveAvailable = await this.prisma.lead.count({
+      where: {
+        availability: 'EXCLUSIVE',
+      },
+    });
+
+    return {
+      totalLead,
+      totalActiveLead,
+      shareAvailable,
+      exclusiveAvailable,
+    };
+  }
 }

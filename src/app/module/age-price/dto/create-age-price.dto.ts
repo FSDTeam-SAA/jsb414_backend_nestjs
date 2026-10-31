@@ -1,30 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsEnum,
-  IsInt,
-  IsNumber,
-  IsUUID,
-  Max,
-  Min,
-  ValidateIf,
-} from 'class-validator';
+import { IsEnum, IsInt, Max, Min, ValidateIf } from 'class-validator';
 import { PriceType } from '../../../../../prisma/generated/prisma/enums';
 
 export class CreateAgePriceDto {
   @ApiProperty({
-    example: '9ab53a94-00b3-4792-8dc6-71ebe2466474',
+    example: 0,
+    minimum: 0,
+    description: 'Minimum age of lead in days (e.g. 0)',
   })
-  @IsUUID()
-  categoryId!: string;
-
-  @ApiProperty({
-    enum: PriceType,
-    example: PriceType.SHARED,
-  })
-  @IsEnum(PriceType)
-  priceType!: PriceType;
-
-  @ApiProperty({ example: 0, minimum: 0 })
   @IsInt()
   @Min(0)
   @Max(2147483647)
@@ -34,7 +17,8 @@ export class CreateAgePriceDto {
     type: Number,
     nullable: true,
     example: 7,
-    description: 'Use null for no upper limit',
+    description:
+      'Maximum age of lead in days (leave null or omit for no upper limit, e.g. 91+)',
   })
   @ValidateIf((_, value) => value !== undefined && value !== null)
   @IsInt()
@@ -43,11 +27,19 @@ export class CreateAgePriceDto {
   maxDays?: number | null;
 
   @ApiProperty({
-    example: 20,
-    description: 'Price in USD dollars: 20 means $20',
+    example: 15,
+    description:
+      'Discount percentage (0 to 100). E.g. 15 means 15% discount off category base price',
   })
-  @IsNumber({ maxDecimalPlaces: 2, allowNaN: false, allowInfinity: false })
+  @IsInt()
   @Min(0)
-  @Max(1000000)
-  price!: number;
+  @Max(100)
+  discountPercent!: number;
+
+  @ApiProperty({
+    enum: PriceType,
+    example: PriceType.SHARED,
+  })
+  @IsEnum(PriceType)
+  priceType!: PriceType;
 }

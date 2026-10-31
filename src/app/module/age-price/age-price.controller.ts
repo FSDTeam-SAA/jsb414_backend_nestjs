@@ -9,17 +9,14 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
-  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
-  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { AuthGuard } from 'src/app/middlewares/auth.guard';
-import { PriceType } from '../../../../prisma/generated/prisma/enums';
 import { AgePriceService } from './age-price.service';
 import { CreateAgePriceDto } from './dto/create-age-price.dto';
 import { UpdateAgePriceDto } from './dto/update-age-price.dto';
@@ -30,7 +27,10 @@ export class AgePriceController {
   constructor(private readonly agePriceService: AgePriceService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create age-based pricing rule (Super Admin only)' })
+  @ApiOperation({
+    summary:
+      'Create an age-based discount rule (e.g. 8 to 30 days: 15% discount)',
+  })
   @ApiBearerAuth('access-token')
   @UseGuards(AuthGuard('superadmin', 'admin'))
   @HttpCode(HttpStatus.CREATED)
@@ -43,24 +43,18 @@ export class AgePriceController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all age-based pricing rules' })
-  @ApiQuery({ name: 'categoryId', required: false, type: String })
-  @ApiQuery({ name: 'priceType', required: false, enum: PriceType })
+  @ApiOperation({
+    summary: 'Get all age-based discount rules',
+  })
   @HttpCode(HttpStatus.OK)
-  async findAll(
-    @Query('categoryId') categoryId?: string,
-    @Query('priceType') priceType?: PriceType,
-  ) {
-    const result = await this.agePriceService.findAllAgePrice(
-      categoryId,
-      priceType,
-    );
+  async findAll() {
+    const result = await this.agePriceService.findAllAgePrice();
     return {
       message: 'Age price rules fetched successfully',
       data: result,
     };
   }
-  // 👇 নির্দিষ্ট রুল দেখা
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a single age price rule by ID' })
   @HttpCode(HttpStatus.OK)
@@ -71,7 +65,7 @@ export class AgePriceController {
       data: result,
     };
   }
-  // 👇 রুল আপডেট (শুধুমাত্র Super Admin)
+
   @Patch(':id')
   @ApiOperation({ summary: 'Update age price rule (Super Admin only)' })
   @ApiBearerAuth('access-token')
@@ -87,7 +81,7 @@ export class AgePriceController {
       data: result,
     };
   }
-  // 👇 রুল ডিলিট (শুধুমাত্র Super Admin)
+
   @Delete(':id')
   @ApiOperation({ summary: 'Delete age price rule (Super Admin only)' })
   @ApiBearerAuth('access-token')

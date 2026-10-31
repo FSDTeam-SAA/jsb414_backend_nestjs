@@ -9,65 +9,100 @@ export interface IPriceCalculationParams {
   agePricingEnabled: boolean;
   ageInDays: number;
   agePriceRules?: Array<{
-    priceType: 'SHARED' | 'EXCLUSIVE';
-    price: DollarValue;
     minDays: number;
     maxDays?: number | null;
+    discountPercent?: number | null;
+    priceType?: 'SHARED' | 'EXCLUSIVE' | null;
+    price?: DollarValue | null;
   }>;
   userDiscountPercent?: number;
 }
 
-// One rule for every screen: category dollars -> optional age dollars -> membership %.
-// Per-lead copied prices are deliberately not read.
+// বয়সভিত্তিক ডিসকাউন্ট (%) ও মেম্বারশিপ ডিসকাউন্ট (%) ক্রমান্বয়ে হিসাব করার কেন্দ্রীয় হেল্পার
 export function calculateDynamicLeadPrice(params: IPriceCalculationParams) {
-  const discountPercent = params.userDiscountPercent ?? 0;
+  const membershipDiscountPercent = params.userDiscountPercent ?? 0;
   if (
-    !Number.isInteger(discountPercent) ||
-    discountPercent < 0 ||
-    discountPercent > 100
+    !Number.isInteger(membershipDiscountPercent) ||
+    membershipDiscountPercent < 0 ||
+    membershipDiscountPercent > 100
   ) {
     throw new ConflictException('Membership discount is invalid');
+  }
+
+  // ১. বয়সভিত্তিক ছাড় নির্ধারণ (যদি ক্যাটাগরিতে agePricingEnabled = true থাকে)
+  let ageDiscountPercent = 0;
+  if (
+    params.agePricingEnabled &&
+    params.agePriceRules &&
+    params.agePriceRules.length > 0
+  ) {
+    const matchingRule = params.agePriceRules.find(
+      (rule) =>
+        rule.minDays <= params.ageInDays &&
+        (rule.maxDays === null ||
+          rule.maxDays === undefined ||
+          rule.maxDays >= params.ageInDays),
+    );
+    if (matchingRule && typeof matchingRule.discountPercent === 'number') {
+      ageDiscountPercent = matchingRule.discountPercent;
+    }
   }
 
   const calculate = (
     type: 'SHARED' | 'EXCLUSIVE',
     base: DollarValue | null,
   ) => {
-    let selected = base;
-    if (params.agePricingEnabled) {
-      const matches = (params.agePriceRules ?? []).filter(
-        (rule) =>
-          rule.priceType === type &&
-          rule.minDays <= params.ageInDays &&
-          (rule.maxDays === null ||
-            rule.maxDays === undefined ||
-            rule.maxDays >= params.ageInDays),
-      );
-      if (matches.length > 1)
-        throw new ConflictException(
-          'Overlapping age-price rules need correction',
-        );
-      if (matches.length === 1) selected = matches[0].price;
+    if (base === null || base === undefined) {
+      return {
+        original: null,
+        final: null,
+        discount: new Prisma.Decimal(0),
+        afterAgePrice: null,
+      };
     }
-    if (selected === null)
-      return { original: null, final: null, discount: new Prisma.Decimal(0) };
-    const original = new Prisma.Decimal(selected);
+
+    const original = new Prisma.Decimal(base);
     if (
       !original.isFinite() ||
       original.isNegative() ||
       original.decimalPlaces() > 2
     ) {
-      throw new ConflictException('Price is not configured correctly');
+      throw new ConflictException('Base price is not configured correctly');
     }
-    const discount = original
-      .mul(discountPercent)
-      .div(100)
-      .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
-    return { original, discount, final: original.minus(discount) };
+
+    // ক. বয়সভিত্তিক ডিসকাউন্ট প্রয়োগ (যদি ক্যাটাগরিতে ট্রু থাকে এবং ছাড় থাকে)
+    let priceAfterAge = original;
+    if (ageDiscountPercent > 0) {
+      const ageCut = original
+        .mul(ageDiscountPercent)
+        .div(100)
+        .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+      priceAfterAge = original.minus(ageCut);
+    }
+
+    // খ. মেম্বারশিপ ডিসকাউন্ট প্রয়োগ (বয়সের পরের দামের ওপর)
+    let final = priceAfterAge;
+    if (membershipDiscountPercent > 0) {
+      const memberCut = priceAfterAge
+        .mul(membershipDiscountPercent)
+        .div(100)
+        .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+      final = priceAfterAge.minus(memberCut);
+    }
+
+    const totalDiscount = original.minus(final);
+
+    return {
+      original,
+      afterAgePrice: priceAfterAge,
+      discount: totalDiscount,
+      final,
+    };
   };
 
   const shared = calculate('SHARED', params.categorySharedBasePrice);
   const exclusive = calculate('EXCLUSIVE', params.categoryExclusiveBasePrice);
+
   return {
     originalShared: shared.original,
     finalShared: shared.final,
@@ -75,7 +110,8 @@ export function calculateDynamicLeadPrice(params: IPriceCalculationParams) {
     originalExclusive: exclusive.original,
     finalExclusive: exclusive.final,
     exclusiveDiscount: exclusive.discount,
-    appliedDiscountPercent: discountPercent,
+    appliedAgeDiscountPercent: ageDiscountPercent,
+    appliedDiscountPercent: membershipDiscountPercent,
   };
 }
 

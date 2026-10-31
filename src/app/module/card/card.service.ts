@@ -71,7 +71,18 @@ export class CardService {
       }
     }
 
-    const selectedPrices = this.leadPrices(lead, 0);
+    let globalRules: any[] = [];
+    if (
+      !lead.category.agePriceRules ||
+      lead.category.agePriceRules.length === 0
+    ) {
+      globalRules = await this.prisma.agePriceRule.findMany({
+        where: { categoryId: null },
+        orderBy: { minDays: 'asc' },
+      });
+    }
+
+    const selectedPrices = this.leadPrices(lead, 0, globalRules);
     const selectedPrice =
       addToCartDto.priceType === 'EXCLUSIVE'
         ? selectedPrices.finalExclusive
@@ -115,7 +126,11 @@ export class CardService {
     });
 
     const membership = await this.currentMembership(userId);
-    const prices = this.leadPrices(lead, membership?.subscribe.discount ?? 0);
+    const prices = this.leadPrices(
+      lead,
+      membership?.subscribe.discount ?? 0,
+      globalRules,
+    );
     return {
       ...cartItem,
       lead: {
@@ -252,25 +267,33 @@ export class CardService {
   // ৩. কার্ট ভিউ (সব আইটেম, ডিসকাউন্ট, অ্যাকাউন্ট ব্যালেন্স ও সামারি)
   // =========================================================================
   async getCart(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { walletBalance: true },
-    });
+    const [user, globalRules, membership, cartItems] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { walletBalance: true },
+      }),
+      this.prisma.agePriceRule.findMany({
+        where: { categoryId: null },
+        orderBy: { minDays: 'asc' },
+      }),
+      this.currentMembership(userId),
+      this.prisma.cartItem.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          lead: { include: { category: { include: { agePriceRules: true } } } },
+        },
+      }),
+    ]);
+
     if (!user) throw new NotFoundException('User not found');
-    const membership = await this.currentMembership(userId);
     const discountPercent = membership?.subscribe.discount ?? 0;
-    const cartItems = await this.prisma.cartItem.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        lead: { include: { category: { include: { agePriceRules: true } } } },
-      },
-    });
+
     let subtotal = new Prisma.Decimal(0);
     let discount = new Prisma.Decimal(0);
     const items = cartItems.map((item) => {
       const lead = item.lead;
-      const prices = this.leadPrices(lead, discountPercent);
+      const prices = this.leadPrices(lead, discountPercent, globalRules);
       const exclusive = item.priceType === 'EXCLUSIVE';
       const original = exclusive
         ? prices.originalExclusive
@@ -344,12 +367,17 @@ export class CardService {
     });
   }
 
-  private leadPrices(lead: any, discountPercent: number) {
+  private leadPrices(lead: any, discountPercent: number, globalRules: any[] = []) {
+    const rules =
+      lead.category.agePriceRules && lead.category.agePriceRules.length > 0
+        ? lead.category.agePriceRules
+        : globalRules;
+
     return calculateDynamicLeadPrice({
       categorySharedBasePrice: lead.category.sharedBasePrice,
       categoryExclusiveBasePrice: lead.category.exclusiveBasePrice,
       agePricingEnabled: lead.category.agePricingEnabled,
-      agePriceRules: lead.category.agePriceRules,
+      agePriceRules: rules,
       ageInDays: inventoryAge(lead.createdAt),
       userDiscountPercent: discountPercent,
     });

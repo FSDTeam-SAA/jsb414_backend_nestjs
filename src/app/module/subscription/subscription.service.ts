@@ -6,13 +6,13 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import Stripe from 'stripe';
+import { PrismaService } from '../../../prisma/prisma.service';
+import config from '../../config';
 import buildWhereConditions from '../../helper/buildWhereConditions';
 import paginationHelper, { IOptions } from '../../helper/pagenation';
 import { IFilterParams } from '../../helper/pick';
-import { PrismaService } from '../../../prisma/prisma.service';
-import config from '../../config';
-import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { CreateSubscriptionPaymentDto } from './dto/create-subscription-payment.dto';
+import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 
 @Injectable()
@@ -301,6 +301,180 @@ export class SubscriptionService {
         price: priceNum,
         discount: plan.discount,
       },
+    };
+  }
+
+  async recentSubscribeTionUser(params: IFilterParams, options: IOptions = {}) {
+    const { limit, page, skip, sortBy, sortOrder } = paginationHelper(options);
+
+    const whenCondition: any = buildWhereConditions(params, ['receiptUrl'], {
+      paymentType: 'SUBSCRIPTION',
+    });
+
+    const [payments, total] = await Promise.all([
+      this.prisma.payment.findMany({
+        where: whenCondition,
+        skip,
+        take: limit,
+        orderBy: {
+          [sortBy]: sortOrder,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phoneNumber: true,
+              photo: true,
+              role: true,
+              walletBalance: true,
+              userSubscribes: {
+                where: { status: 'ACTIVE' },
+                select: {
+                  id: true,
+                  status: true,
+                  startDate: true,
+                  endDate: true,
+                },
+                take: 1,
+              },
+            },
+          },
+          subscribe: {
+            select: {
+              id: true,
+              title: true,
+              subTitle: true,
+              price: true,
+              discount: true,
+              currency: true,
+            },
+          },
+        },
+      }),
+      this.prisma.payment.count({ where: whenCondition }),
+    ]);
+
+    return {
+      meta: {
+        page,
+        limit,
+        total,
+      },
+      data: payments,
+    };
+  }
+
+  async subscripeOverview() {
+    const [
+      activePadTotalUser,
+      silverTotalMember,
+      goldTotalMemeber,
+      diamonTotalMember,
+      totalRevenueAgg,
+      silverRevenueAgg,
+      goldRevenueAgg,
+      diamondRevenueAgg,
+    ] = await Promise.all([
+      this.prisma.userSubscribe.count({
+        where: {
+          status: 'ACTIVE',
+          subscribe: {
+            price: { gt: 0 },
+          },
+        },
+      }),
+      this.prisma.userSubscribe.count({
+        where: {
+          status: 'ACTIVE',
+          subscribe: {
+            title: { contains: 'silver', mode: 'insensitive' },
+          },
+        },
+      }),
+      this.prisma.userSubscribe.count({
+        where: {
+          status: 'ACTIVE',
+          subscribe: {
+            title: { contains: 'gold', mode: 'insensitive' },
+          },
+        },
+      }),
+      this.prisma.userSubscribe.count({
+        where: {
+          status: 'ACTIVE',
+          subscribe: {
+            title: { contains: 'diamond', mode: 'insensitive' },
+          },
+        },
+      }),
+      this.prisma.payment.aggregate({
+        where: {
+          paymentType: 'SUBSCRIPTION',
+          status: 'COMPLETED',
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+      this.prisma.payment.aggregate({
+        where: {
+          paymentType: 'SUBSCRIPTION',
+          status: 'COMPLETED',
+          subscribe: {
+            title: { contains: 'silver', mode: 'insensitive' },
+          },
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+      this.prisma.payment.aggregate({
+        where: {
+          paymentType: 'SUBSCRIPTION',
+          status: 'COMPLETED',
+          subscribe: {
+            title: { contains: 'gold', mode: 'insensitive' },
+          },
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+      this.prisma.payment.aggregate({
+        where: {
+          paymentType: 'SUBSCRIPTION',
+          status: 'COMPLETED',
+          subscribe: {
+            title: { contains: 'diamond', mode: 'insensitive' },
+          },
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+    ]);
+
+    const totalMemeberSubscribeRevenue = Number(
+      totalRevenueAgg._sum.amount || 0,
+    );
+    const silverPlanReveniy = Number(silverRevenueAgg._sum.amount || 0);
+    const goldPlanReveniy = Number(goldRevenueAgg._sum.amount || 0);
+    const diamonPlanReveniy = Number(diamondRevenueAgg._sum.amount || 0);
+
+    return {
+      // Clean camelCase aliases
+      activePaidTotalUser: activePadTotalUser,
+      silverTotalMember: silverTotalMember,
+      goldTotalMember: goldTotalMemeber,
+      diamondTotalMember: diamonTotalMember,
+      
+      totalMemberSubscribeRevenue: totalMemeberSubscribeRevenue,
+      silverPlanRevenue: silverPlanReveniy,
+      goldPlanRevenue: goldPlanReveniy,
+      diamondPlanRevenue: diamonPlanReveniy,
     };
   }
 }

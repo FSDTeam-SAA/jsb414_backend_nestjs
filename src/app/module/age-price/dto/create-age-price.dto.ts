@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsInt, Max, Min, ValidateIf } from 'class-validator';
-import { PriceType } from '../../../../../prisma/generated/prisma/enums';
+import { IsInt, Max, Min, ValidateIf } from 'class-validator';
 
 export class CreateAgePriceDto {
   @ApiProperty({
@@ -35,11 +34,4 @@ export class CreateAgePriceDto {
   @Min(0)
   @Max(100)
   discountPercent!: number;
-
-  @ApiProperty({
-    enum: PriceType,
-    example: PriceType.SHARED,
-  })
-  @IsEnum(PriceType)
-  priceType!: PriceType;
 }

@@ -73,9 +73,9 @@ export class AgePriceController {
   }
   // 👇 রুল আপডেট (শুধুমাত্র Super Admin)
   @Patch(':id')
-  @ApiOperation({ summary: 'Update age price rule (Super Admin only)' })
+  @ApiOperation({ summary: 'Update age price rule' })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('superadmin'))
+  @UseGuards(AuthGuard('superadmin', 'admin'))
   @HttpCode(HttpStatus.OK)
   async update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -89,9 +89,9 @@ export class AgePriceController {
   }
   // 👇 রুল ডিলিট (শুধুমাত্র Super Admin)
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete age price rule (Super Admin only)' })
+  @ApiOperation({ summary: 'Delete age price rule' })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('superadmin'))
+  @UseGuards(AuthGuard('superadmin', 'admin'))
   @HttpCode(HttpStatus.OK)
   async remove(@Param('id', ParseUUIDPipe) id: string) {
     const result = await this.agePriceService.remove(id);

@@ -55,6 +55,13 @@ enum PriceType {
     EXCLUSIVE
 }
 
+enum ContactStatus {
+    PENDING
+    IN_PROGRESS
+    RESOLVED
+    CLOSED
+}
+
 enum WalletTransactionType {
     TOP_UP // কাস্টমার নিজে ফান্ড অ্যাড করেছে ($100, $250 ইত্যাদি)
     PURCHASE // লিড কেনার জন্য ব্যালেন্স থেকে কাটা হয়েছে

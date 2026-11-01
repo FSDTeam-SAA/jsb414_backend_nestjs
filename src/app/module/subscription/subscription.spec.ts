@@ -241,17 +241,8 @@ describe('Subscription Service - Checkout URL & Free Activation', () => {
       const overview = await service.subscripeOverview();
 
       expect(overview).toEqual({
-        activePadTotalUser: 1842,
-        silverTotalMember: 600,
-        goldTotalMemeber: 400,
-        diamonTotalMember: 842,
-
-        totalMemeberSubscribeRevenue: 10842,
-        silverPlanReveniy: 6000,
-        goldPlanReveniy: 4000,
-        diamonPlanReveniy: 842,
-
         activePaidTotalUser: 1842,
+        silverTotalMember: 600,
         goldTotalMember: 400,
         diamondTotalMember: 842,
         totalMemberSubscribeRevenue: 10842,
@@ -276,11 +267,11 @@ describe('Subscription Service - Checkout URL & Free Activation', () => {
 
       const overview = await service.subscripeOverview();
 
-      expect(overview.activePadTotalUser).toBe(0);
-      expect(overview.totalMemeberSubscribeRevenue).toBe(0);
-      expect(overview.silverPlanReveniy).toBe(0);
-      expect(overview.goldPlanReveniy).toBe(0);
-      expect(overview.diamonPlanReveniy).toBe(0);
+      expect(overview.activePaidTotalUser).toBe(0);
+      expect(overview.totalMemberSubscribeRevenue).toBe(0);
+      expect(overview.silverPlanRevenue).toBe(0);
+      expect(overview.goldPlanRevenue).toBe(0);
+      expect(overview.diamondPlanRevenue).toBe(0);
     });
   });
 });

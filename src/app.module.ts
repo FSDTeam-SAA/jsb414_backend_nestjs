@@ -17,6 +17,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { OrderModule } from './app/module/order/order.module';
 import { WalletModule } from './app/module/wallet/wallet.module';
 import { WebhookModule } from './app/module/webhook/webhook.module';
+import { ContactupModule } from './app/module/contactup/contactup.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { WebhookModule } from './app/module/webhook/webhook.module';
     OrderModule,
     WalletModule,
     WebhookModule,
+    ContactupModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

@@ -30,6 +30,7 @@ model User {
     userLead           UserLead[]
     savedSearches      SavedSearch[]
     orders             Order[]
+    contactUs          ContactUs[]
     walletTransactions WalletTransaction[]
 
     createdAt DateTime @default(now())

@@ -35,6 +35,7 @@ model User {
     orders             Order[]
     contactUs          ContactUs[]
     walletTransactions WalletTransaction[]
+    badLeadRequests    BadLeadRequest[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

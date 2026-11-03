@@ -227,6 +227,27 @@ export class UserController {
     return this.userService.deleteAdmin(id);
   }
 
+  // =========================================================================
+  // কাস্টমার ম্যানেজমেন্ট: একক কাস্টমারের সম্পূর্ণ বিবরণ (Section 43)
+  // =========================================================================
+
+  @Get('customer/:id')
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('CUSTOMERS')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary:
+      'Admin gets full customer details: profile, active membership, purchased leads, financial summary, and bad lead requests (Section 43)',
+  })
+  @HttpCode(HttpStatus.OK)
+  async getCustomerDetails(@Param('id', ParseUUIDPipe) id: string) {
+    const result = await this.userService.getCustomerDetails(id);
+    return {
+      message: 'Customer details fetched successfully',
+      data: result,
+    };
+  }
+
   @Get(':id')
   @UseGuards(AuthGuard('admin', 'superadmin'))
   @ApiBearerAuth('access-token')

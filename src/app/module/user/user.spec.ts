@@ -34,6 +34,23 @@ describe('UserService - Admin Role & Permissions', () => {
         })),
         delete: jest.fn().mockResolvedValue({ id: 'admin_id_1' }),
       },
+      userSubscribe: {
+        findFirst: jest.fn(),
+      },
+      userLead: {
+        findMany: jest.fn(),
+        count: jest.fn(),
+      },
+      order: {
+        aggregate: jest.fn(),
+        findMany: jest.fn(),
+      },
+      savedSearch: {
+        count: jest.fn(),
+      },
+      badLeadRequest: {
+        findMany: jest.fn(),
+      },
     };
 
     service = new UserService(db as PrismaService);
@@ -130,6 +147,101 @@ describe('UserService - Admin Role & Permissions', () => {
       const result = await service.deleteAdmin('adm_1');
       expect(db.user.delete).toHaveBeenCalledWith({ where: { id: 'adm_1' } });
       expect(result.message).toContain('removed successfully');
+    });
+  });
+
+  describe('getCustomerDetails', () => {
+    it('returns full customer details with membership, purchased leads, and financials', async () => {
+      const customerId = 'cust_123';
+      db.user.findUnique.mockResolvedValueOnce({
+        id: customerId,
+        firstName: 'Budi',
+        lastName: 'Santoso',
+        email: 'budi@example.com',
+        phoneNumber: '+1-555-1234',
+        photo: null,
+        role: 'user',
+        verifiedEmail: true,
+        walletBalance: 425,
+        leadTypes: ['Pre-Foreclosure'],
+        interestedStates: ['FL'],
+        interestedCities: ['Miami'],
+        createdAt: new Date(),
+      });
+
+      db.userSubscribe.findFirst.mockResolvedValueOnce({
+        id: 'sub_1',
+        status: 'ACTIVE',
+        startDate: new Date(),
+        endDate: new Date(Date.now() + 30 * 86400000),
+        subscribe: { id: 'plan_gold', title: 'Gold', price: 99, discount: 10 },
+      });
+
+      db.userLead.findMany.mockResolvedValueOnce([
+        {
+          id: 'ul_1',
+          leadId: 'l_1',
+          priceType: 'SHARED',
+          pricePaid: 20.19,
+          purchasedAt: new Date(),
+          lead: {
+            leadNumber: 112,
+            category: { name: 'Pre-Foreclosure' },
+            propertyAddress: '500 Ocean Dr',
+            city: 'Miami Beach',
+            state: 'FL',
+            zipcode: '33139',
+            phoneNumbers: ['(305) 555-1111'],
+            emailAddresses: ['budi@example.com'],
+          },
+        },
+      ]);
+      db.userLead.count.mockResolvedValueOnce(1);
+
+      db.order.aggregate.mockResolvedValueOnce({
+        _count: { id: 2 },
+        _sum: { totalAmount: 150, walletUsed: 50, cardPaid: 100 },
+      });
+
+      db.savedSearch.count.mockResolvedValueOnce(3);
+
+      db.badLeadRequest.findMany.mockResolvedValueOnce([
+        {
+          id: 'blr_1',
+          leadId: 'l_1',
+          reason: 'INVALID_PHONE',
+          explanation: 'Disconnected',
+          status: 'PENDING',
+          creditReturned: null,
+          adminNotes: null,
+          createdAt: new Date(),
+          reviewedAt: null,
+          lead: { leadNumber: 112, city: 'Miami Beach', state: 'FL' },
+        },
+      ]);
+
+      db.order.findMany.mockResolvedValueOnce([
+        {
+          id: 'ord_1',
+          orderNumber: 'FG-ORD-1001',
+          totalAmount: 50,
+          status: 'COMPLETED',
+          createdAt: new Date(),
+        },
+      ]);
+
+      const result = await service.getCustomerDetails(customerId);
+
+      expect(result.customer.fullName).toBe('Budi Santoso');
+      expect(result.membership.planName).toBe('Gold');
+      expect(result.membership.discount).toBe(10);
+      expect(result.financials.walletBalance).toBe(425);
+      expect(result.financials.totalOrders).toBe(2);
+      expect(result.financials.totalSpent).toBe(150);
+      expect(result.leadsActivity.totalPurchasedLeads).toBe(1);
+      expect(result.leadsActivity.savedSearchesCount).toBe(3);
+      expect(result.leadsActivity.badLeadRequests.length).toBe(1);
+      expect(result.leadsActivity.badLeadRequests[0].reason).toBe('INVALID_PHONE');
     });
   });
 });

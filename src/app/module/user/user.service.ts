@@ -25,6 +25,7 @@ export class UserService {
       'phoneNumber',
     ]);
 
+    const now = new Date();
     const [result, total] = await Promise.all([
       this.prisma.user.findMany({
         where: whenCondition,
@@ -33,15 +34,66 @@ export class UserService {
         orderBy: {
           [sortBy]: sortOrder,
         },
-        select: publicUserSelect,
+        select: {
+          ...publicUserSelect,
+          walletBalance: true,
+          userSubscribes: {
+            where: {
+              status: { in: ['ACTIVE', 'CANCELLED'] },
+              startDate: { lte: now },
+              endDate: { gt: now },
+            },
+            take: 1,
+            orderBy: { endDate: 'desc' },
+            include: {
+              subscribe: {
+                select: {
+                  id: true,
+                  title: true,
+                  price: true,
+                  discount: true,
+                },
+              },
+            },
+          },
+          _count: {
+            select: {
+              userLead: true,
+              orders: true,
+              badLeadRequests: true,
+            },
+          },
+        },
       }),
       this.prisma.user.count({
         where: whenCondition,
       }),
     ]);
 
+    const formatted = result.map((u: any) => ({
+      id: u.id,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      fullName: `${u.firstName || ''} ${u.lastName || ''}`.trim(),
+      email: u.email,
+      phoneNumber: u.phoneNumber,
+      photo: u.photo,
+      role: u.role,
+      verifiedEmail: u.verifiedEmail,
+      walletBalance: Number(u.walletBalance || 0),
+      membership: u.userSubscribes?.[0]?.subscribe?.title || 'Free',
+      membershipPlanId: u.userSubscribes?.[0]?.subscribe?.id || null,
+      membershipStatus: u.userSubscribes?.[0]?.status || 'ACTIVE',
+      membershipExpiry: u.userSubscribes?.[0]?.endDate || null,
+      totalPurchasedLeads: u._count?.userLead || 0,
+      totalOrders: u._count?.orders || 0,
+      totalBadLeadRequests: u._count?.badLeadRequests || 0,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
+    }));
+
     return {
-      data: result,
+      data: formatted,
       meta: {
         total,
         page,
@@ -358,6 +410,185 @@ export class UserService {
 
     return {
       message: 'Admin account removed successfully',
+    };
+  }
+
+  // ৫. অ্যাডমিনের জন্য কাস্টমারের সম্পূর্ণ প্রোফাইল, মেম্বারশিপ, কেনা লিড, ফিনান্সিয়াল হিসাব ও ব্যাড লিড রিকোয়েস্ট (Section 43)
+  async getCustomerDetails(customerId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: customerId },
+      select: {
+        ...publicUserSelect,
+        walletBalance: true,
+      },
+    });
+
+    if (!user) {
+      throw new HttpException('Customer not found', HttpStatus.NOT_FOUND);
+    }
+
+    const now = new Date();
+    const [
+      currentSub,
+      purchasedLeads,
+      totalPurchasedLeadsCount,
+      completedOrders,
+      savedSearchesCount,
+      badLeads,
+      recentOrders,
+    ] = await Promise.all([
+      // ১. বর্তমান সক্রিয় সাবস্ক্রিপশন প্ল্যান
+      this.prisma.userSubscribe.findFirst({
+        where: {
+          userId: customerId,
+          status: { in: ['ACTIVE', 'CANCELLED'] },
+          startDate: { lte: now },
+          endDate: { gt: now },
+        },
+        include: { subscribe: true },
+        orderBy: { endDate: 'desc' },
+      }),
+
+      // ২. রিসেন্ট কেনা লিড (আনমাস্কড ফুল ইনফরমেশন)
+      this.prisma.userLead.findMany({
+        where: { userId: customerId },
+        take: 10,
+        orderBy: { purchasedAt: 'desc' },
+        include: {
+          lead: {
+            include: {
+              category: { select: { id: true, name: true } },
+            },
+          },
+        },
+      }),
+
+      // ৩. সর্বমোট কেনা লিডের সংখ্যা
+      this.prisma.userLead.count({ where: { userId: customerId } }),
+
+      // ৪. ফিনান্সিয়াল অর্ডার এগ্রিগেশন (মোট খরচ ও মোট কমপ্লিটেড অর্ডার)
+      this.prisma.order.aggregate({
+        where: { userId: customerId, status: 'COMPLETED' },
+        _count: { id: true },
+        _sum: { totalAmount: true, walletUsed: true, cardPaid: true },
+      }),
+
+      // ৫. সেভড সার্চের সংখ্যা
+      this.prisma.savedSearch.count({ where: { userId: customerId } }),
+
+      // ৬. ব্যাড লিড রিকোয়েস্ট
+      this.prisma.badLeadRequest.findMany({
+        where: { userId: customerId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          lead: {
+            select: {
+              id: true,
+              leadNumber: true,
+              propertyAddress: true,
+              city: true,
+              state: true,
+            },
+          },
+        },
+      }),
+
+      // ৭. রিসেন্ট ৫টি অর্ডার
+      this.prisma.order.findMany({
+        where: { userId: customerId },
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          orderNumber: true,
+          totalAmount: true,
+          status: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    return {
+      customer: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        fullName: `${user.firstName} ${user.lastName}`.trim(),
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        photo: user.photo,
+        role: user.role,
+        verifiedEmail: user.verifiedEmail,
+        leadTypes: user.leadTypes,
+        interestedStates: user.interestedStates,
+        interestedCities: user.interestedCities,
+        registeredAt: user.createdAt,
+      },
+      membership: currentSub
+        ? {
+            planId: currentSub.subscribe.id,
+            planName: currentSub.subscribe.title,
+            price: currentSub.subscribe.price,
+            discount: currentSub.subscribe.discount,
+            status: currentSub.status,
+            startDate: currentSub.startDate,
+            renewalDate: currentSub.endDate,
+          }
+        : {
+            planId: null,
+            planName: 'Free',
+            price: 0,
+            discount: 0,
+            status: 'ACTIVE',
+            startDate: null,
+            renewalDate: null,
+          },
+      financials: {
+        walletBalance: Number(user.walletBalance || 0),
+        totalOrders: completedOrders._count.id || 0,
+        totalSpent: Number(completedOrders._sum.totalAmount || 0),
+        walletSpent: Number(completedOrders._sum.walletUsed || 0),
+        cardSpent: Number(completedOrders._sum.cardPaid || 0),
+      },
+      leadsActivity: {
+        totalPurchasedLeads: totalPurchasedLeadsCount,
+        savedSearchesCount,
+        recentPurchasedLeads: purchasedLeads.map((ul) => ({
+          id: ul.id,
+          leadId: ul.leadId,
+          leadNumber: ul.lead.leadNumber,
+          category: ul.lead.category?.name,
+          propertyAddress: ul.lead.propertyAddress,
+          city: ul.lead.city,
+          state: ul.lead.state,
+          zipcode: ul.lead.zipcode,
+          phoneNumbers: ul.lead.phoneNumbers,
+          emailAddresses: ul.lead.emailAddresses,
+          priceType: ul.priceType,
+          pricePaid: Number(ul.pricePaid),
+          purchasedAt: ul.purchasedAt,
+        })),
+        badLeadRequests: badLeads.map((bl) => ({
+          id: bl.id,
+          leadId: bl.leadId,
+          leadNumber: bl.lead.leadNumber,
+          leadLocation: `${bl.lead.city || ''}, ${bl.lead.state || ''}`.trim(),
+          reason: bl.reason,
+          explanation: bl.explanation,
+          status: bl.status,
+          creditReturned: bl.creditReturned ? Number(bl.creditReturned) : null,
+          adminNotes: bl.adminNotes,
+          createdAt: bl.createdAt,
+          reviewedAt: bl.reviewedAt,
+        })),
+      },
+      recentOrders: recentOrders.map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        totalAmount: Number(o.totalAmount),
+        status: o.status,
+        createdAt: o.createdAt,
+      })),
     };
   }
 }

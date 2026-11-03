@@ -10,6 +10,7 @@ import {
 } from 'class-validator';
 
 export enum AdminPermission {
+  READ_ONLY = 'READ_ONLY', // রিড-অনলি মোড: সব দেখতে পারবে কিন্তু কোনো পরিবর্তন বা অ্যাকশন নিতে পারবে না
   LEADS = 'LEADS', // লিড তৈরি, এডিট, ডিলিট ও ফাইল ইমপোর্ট
   CUSTOMERS = 'CUSTOMERS', // কাস্টমার তালিকা ও প্রোফাইল
   ORDERS = 'ORDERS', // কাস্টমার অর্ডার ও ট্রানজেকশন

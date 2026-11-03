@@ -47,7 +47,6 @@ export class LeadController {
   })
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
   @UseInterceptors(FileInterceptor('propertyImage', fileUpload.uploadConfig))
   @HttpCode(HttpStatus.CREATED)
   async createLead(
@@ -74,7 +73,6 @@ export class LeadController {
   })
   @ApiConsumes('multipart/form-data')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
   @UseInterceptors(FileInterceptor('file', fileUpload.documentUploadConfig))
   @HttpCode(HttpStatus.CREATED)
   async bulkUploadLeads(
@@ -111,7 +109,6 @@ export class LeadController {
   @ApiQuery({ name: 'sortBy', required: false, type: 'string' })
   @ApiQuery({ name: 'sortOrder', required: false, type: 'string' })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
   @HttpCode(HttpStatus.OK)
   async getAllLeads(@Req() req: Request) {
     const filters = pick(req.query, [
@@ -140,7 +137,6 @@ export class LeadController {
     summary: 'Lead overview',
   })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('superadmin', 'admin'))
   @HttpCode(HttpStatus.OK)
   async leadOverview() {
     const result = await this.leadService.leadOverview();
@@ -155,7 +151,6 @@ export class LeadController {
     summary: 'Get a single lead by ID',
   })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
   @HttpCode(HttpStatus.OK)
   async getLeadById(@Param('id') id: string) {
     const result = await this.leadService.getSingleLead(id);
@@ -171,7 +166,6 @@ export class LeadController {
   })
   @ApiConsumes('multipart/form-data')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
   @UseInterceptors(FileInterceptor('propertyImage', fileUpload.uploadConfig))
   @HttpCode(HttpStatus.OK)
   async updateLead(
@@ -191,7 +185,6 @@ export class LeadController {
     summary: 'Delete a lead by ID',
   })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
   @HttpCode(HttpStatus.OK)
   async deleteLead(@Param('id') id: string) {
     const result = await this.leadService.deleteLead(id);

@@ -26,6 +26,9 @@ import {
 
 interface AuthTokenPayload {
   id: string;
+  email?: string;
+  role?: string;
+  permissions?: string[];
   purpose: 'access' | 'refresh' | 'password-reset';
   passwordVersion?: string;
   nonce?: string;
@@ -55,7 +58,13 @@ export class AuthService {
   }
 
   private signToken(
-    user: { id: string; email: string; role: string; password: string },
+    user: {
+      id: string;
+      email: string;
+      role: string;
+      password: string;
+      permissions?: string[];
+    },
     purpose: 'access' | 'refresh',
   ) {
     return this.jwtService.sign(
@@ -63,6 +72,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         role: user.role,
+        permissions: user.permissions || [],
         purpose,
         passwordVersion: passwordVersion(user.password),
       },
@@ -272,7 +282,13 @@ export class AuthService {
       select: publicUserSelect,
     });
 
-    return { user: safeUser, accessToken };
+    return {
+      user: {
+        ...safeUser,
+        permissions: safeUser?.permissions || user.permissions || [],
+      },
+      accessToken,
+    };
   }
 
   async refreshToken(token: string) {

@@ -24,6 +24,7 @@ import type { Request } from 'express';
 import { fileUpload } from 'src/app/helper/fileUploder';
 import pick from 'src/app/helper/pick';
 import { AuthGuard } from 'src/app/middlewares/auth.guard';
+import { PermissionsGuard } from 'src/app/middlewares/permissions.guard';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -38,7 +39,7 @@ export class CategoriesController {
   })
   @ApiConsumes('multipart/form-data')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
   @UseInterceptors(FileInterceptor('logo', fileUpload.uploadConfig))
   @HttpCode(HttpStatus.CREATED)
   async createCategory(
@@ -124,7 +125,7 @@ export class CategoriesController {
   })
   @ApiConsumes('multipart/form-data')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
   @UseInterceptors(FileInterceptor('logo', fileUpload.uploadConfig))
   @HttpCode(HttpStatus.OK)
   async updateCategory(
@@ -148,7 +149,7 @@ export class CategoriesController {
     summary: 'Delete category',
   })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
   @HttpCode(HttpStatus.OK)
   async deleteCategory(@Param('id') id: string) {
     const result = await this.categoriesService.deleteCategorie(id);

@@ -265,7 +265,8 @@ export class UserController {
   }
 
   @Patch(':id')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('CUSTOMERS')
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'update user by id (Admin)',

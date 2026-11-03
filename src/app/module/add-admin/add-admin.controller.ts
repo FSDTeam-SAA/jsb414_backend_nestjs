@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import pick from '../../helper/pick';
 import { AuthGuard } from '../../middlewares/auth.guard';
+import { PermissionsGuard } from '../../middlewares/permissions.guard';
 import { UserQueryDto } from '../user/dto/user-query.dto';
 import { AddAdminService } from './add-admin.service';
 import { CreateAddAdminDto } from './dto/create-add-admin.dto';
@@ -27,7 +28,7 @@ import { UpdateAddAdminDto } from './dto/update-add-admin.dto';
 
 @ApiTags('Super Admin - Manage Admins')
 @ApiBearerAuth('access-token')
-@UseGuards(AuthGuard('superadmin')) // শুধুমাত্র Super Admin সাব-অ্যাডমিন তৈরি ও ম্যানেজ করতে পারবে
+@UseGuards(AuthGuard('superadmin', 'admin'), PermissionsGuard)
 @Controller('add-admin')
 export class AddAdminController {
   constructor(private readonly addAdminService: AddAdminService) {}

@@ -22,28 +22,54 @@ export class PermissionsGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
-    // কোনো পারমিশন স্পেসিফাই না থাকলে চেক করার প্রয়োজন নেই
-    if (!requiredPermissions || requiredPermissions.length === 0) {
-      return true;
-    }
-
     const request = context.switchToHttp().getRequest<Request>();
     const user = request.user;
 
+    // 1. Unauthenticated requests:
     if (!user) {
-      throw new ForbiddenException('User is not authenticated');
+      // If a route explicitly requires permissions, block
+      if (requiredPermissions && requiredPermissions.length > 0) {
+        throw new ForbiddenException('User is not authenticated');
+      }
+      return true;
     }
 
-    // সুপার অ্যাডমিনের সবসময় সব অ্যাকশনে ফুল এক্সেস থাকবে
+    // 2. Super Admin always has full access to all endpoints
     if (user.role === 'superadmin') {
       return true;
     }
 
-    // সাধারণ অ্যাডমিনের ক্ষেত্রে পারমিশন চেক করা হবে
+    // 3. Staff Admin:
     if (user.role === 'admin') {
-      const userPermissions = user.permissions || [];
+      const userPermissions = (user.permissions || []).map((p: string) =>
+        String(p).trim().toUpperCase(),
+      );
+      const isReadOnly =
+        userPermissions.includes('READ_ONLY') ||
+        userPermissions.includes('READONLY');
+      const method = (request.method || 'GET').toUpperCase();
+
+      // Read-Only Enforcement:
+      // Read-Only admins CANNOT perform any create, update, delete or mutating action
+      if (isReadOnly) {
+        // Allow read-only queries (GET and HEAD)
+        if (method === 'GET' || method === 'HEAD') {
+          return true;
+        }
+        // Strict denial for all mutating requests
+        throw new ForbiddenException(
+          'Read-only admin accounts cannot perform create, edit, delete, or any mutating action',
+        );
+      }
+
+      // If no specific module permissions required, allow admin access
+      if (!requiredPermissions || requiredPermissions.length === 0) {
+        return true;
+      }
+
+      // Module permission verification
       const hasPermission = requiredPermissions.some((perm) =>
-        userPermissions.includes(perm),
+        userPermissions.includes(perm.toUpperCase()),
       );
 
       if (hasPermission) {
@@ -55,6 +81,11 @@ export class PermissionsGuard implements CanActivate {
       );
     }
 
-    throw new ForbiddenException('Access denied');
+    // 4. Regular users/customers:
+    if (requiredPermissions && requiredPermissions.length > 0) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    return true;
   }
 }

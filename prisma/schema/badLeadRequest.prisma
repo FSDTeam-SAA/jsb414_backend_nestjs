@@ -1,0 +1,21 @@
+model BadLeadRequest {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leadId         String
+  lead           Lead      @relation(fields: [leadId], references: [id], onDelete: Restrict)
+
+  reason         String    // Invalid Phone, Invalid Email, Incorrect Contact, Property Inaccurate, Duplicate, Other
+  explanation    String?   // ইউজারের ব্যাখ্যা / নোটস
+  status         String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  creditReturned Decimal?  @db.Decimal(14, 2)  // রিফান্ড দেওয়া ওয়ালেট ক্রেডিট ডলারের পরিমাণ
+  adminNotes     String?   // অ্যাডমিনের মন্তব্য
+  reviewedAt     DateTime?
+  reviewedById   String?
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userId, leadId]) // একই লিডের জন্য একাধিক সক্রিয় রিকোয়েস্ট হবে না
+  @@map("bad_lead_requests")
+}

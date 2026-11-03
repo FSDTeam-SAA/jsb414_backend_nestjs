@@ -12,6 +12,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import pick from 'src/app/helper/pick';
 import { AuthGuard } from 'src/app/middlewares/auth.guard';
+import {
+  PermissionsGuard,
+  RequirePermissions,
+} from 'src/app/middlewares/permissions.guard';
 import { AdminAdjustWalletDto } from './dto/admin-adjust-wallet.dto';
 import { CreateWalletDto } from './dto/create-wallet.dto';
 import { WalletService } from './wallet.service';
@@ -70,10 +74,11 @@ export class WalletController {
 
   @Post('admin/adjust')
   @ApiOperation({
-    summary: 'Super Admin manual account-credit adjustment in USD',
+    summary: 'Admin / Super Admin manual account-credit adjustment in USD',
   })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('CUSTOMERS')
   @HttpCode(HttpStatus.OK)
   async adminAdjustBalance(
     @Req() req: Request,

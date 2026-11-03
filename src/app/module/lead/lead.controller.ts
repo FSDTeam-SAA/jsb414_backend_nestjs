@@ -25,12 +25,18 @@ import type { Request } from 'express';
 import { fileUpload } from 'src/app/helper/fileUploder';
 import pick from 'src/app/helper/pick';
 import { AuthGuard } from 'src/app/middlewares/auth.guard';
+import {
+  PermissionsGuard,
+  RequirePermissions,
+} from 'src/app/middlewares/permissions.guard';
 import { BulkUploadLeadDto } from './dto/bulk-upload-lead.dto';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 import { LeadService } from './lead.service';
 
 @ApiTags('Leads')
+@UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+@RequirePermissions('LEADS')
 @Controller('lead')
 export class LeadController {
   constructor(private readonly leadService: LeadService) {}

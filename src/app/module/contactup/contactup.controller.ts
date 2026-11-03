@@ -21,6 +21,10 @@ import {
 import type { Request } from 'express';
 import pick from 'src/app/helper/pick';
 import { AuthGuard } from 'src/app/middlewares/auth.guard';
+import {
+  PermissionsGuard,
+  RequirePermissions,
+} from 'src/app/middlewares/permissions.guard';
 import { ContactupService } from './contactup.service';
 import { AdminReplyContactupDto } from './dto/admin-reply-contactup.dto';
 import { CreateContactupDto } from './dto/create-contactup.dto';
@@ -74,7 +78,8 @@ export class ContactupController {
 
   @Get()
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('SUPPORT')
   @ApiOperation({
     summary: 'Get all contact messages with filtering and pagination (Admin)',
   })
@@ -106,6 +111,9 @@ export class ContactupController {
   }
 
   @Get(':id')
+  @ApiBearerAuth('access-token')
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('SUPPORT')
   @ApiOperation({ summary: 'Get contact message by id (Admin)' })
   @HttpCode(HttpStatus.OK)
   async getContactUsById(@Param('id', ParseUUIDPipe) id: string) {
@@ -118,7 +126,8 @@ export class ContactupController {
 
   @Post(':id/reply')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('SUPPORT')
   @ApiOperation({
     summary: 'Admin reply to a contact / support message',
     description:
@@ -154,7 +163,8 @@ export class ContactupController {
 
   @Delete(':id')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('SUPPORT')
   @ApiOperation({ summary: 'Delete contact message (Admin)' })
   @HttpCode(HttpStatus.OK)
   async deleteContactUs(@Param('id', ParseUUIDPipe) id: string) {

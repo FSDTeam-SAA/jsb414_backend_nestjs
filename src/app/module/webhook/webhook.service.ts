@@ -71,6 +71,10 @@ export class WebhookService {
         await this.handleSubscriptionPayment(session);
         break;
 
+      case 'ORDER_PURCHASE':
+        await this.handleOrderPayment(session);
+        break;
+
       default:
         break;
     }
@@ -230,6 +234,121 @@ export class WebhookService {
           },
         });
       }
+    });
+  }
+
+  // ৫. Order (Lead Purchase) payment যাচাই ও প্রসেসিং
+  private async handleOrderPayment(session: Stripe.Checkout.Session) {
+    if (session.mode !== 'payment' || session.payment_status !== 'paid') {
+      return;
+    }
+
+    const orderId = session.metadata?.orderId;
+    if (!orderId) {
+      return;
+    }
+
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        orderItems: true,
+      },
+    });
+
+    if (!order || order.status === 'COMPLETED') {
+      return;
+    }
+
+    const paymentIntentId =
+      typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id;
+
+    await this.prisma.$transaction(async (tx) => {
+      // ডুপ্লিকেট রোধে শুধুমাত্র PENDING অর্ডার আপডেট
+      const claimed = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          status: 'PENDING',
+        },
+        data: {
+          status: 'COMPLETED',
+          stripePaymentId: paymentIntentId || session.id,
+        },
+      });
+
+      if (claimed.count === 0) {
+        return;
+      }
+
+      // যদি ওয়ালেট দিয়ে আংশিক পেমেন্ট থাকে, তবে ওয়ালেট ব্যালেন্স কাটা হবে
+      const walletUsed = Number(order.walletUsed || 0);
+      if (walletUsed > 0) {
+        const user = await tx.user.update({
+          where: { id: order.userId },
+          data: {
+            walletBalance: {
+              decrement: walletUsed,
+            },
+          },
+          select: {
+            walletBalance: true,
+          },
+        });
+
+        await tx.walletTransaction.create({
+          data: {
+            userId: order.userId,
+            amount: walletUsed,
+            balanceAfter: user.walletBalance,
+            type: 'PURCHASE',
+            referenceId: order.id,
+            operationKey: `order:${order.id}`,
+            description: `Lead purchase Order #${order.orderNumber}`,
+          },
+        });
+      }
+
+      // অর্ডার করা প্রতিটা লিড ইউজারের একাউন্টে যুক্ত করা এবং ইনভেন্টরি আপডেট
+      for (const item of order.orderItems) {
+        await tx.userLead.upsert({
+          where: {
+            userId_leadId: {
+              userId: order.userId,
+              leadId: item.leadId,
+            },
+          },
+          create: {
+            userId: order.userId,
+            leadId: item.leadId,
+            priceType: item.priceType,
+            pricePaid: item.pricePaid,
+            orderId: order.id,
+          },
+          update: {},
+        });
+
+        if (item.priceType === 'EXCLUSIVE') {
+          await tx.lead.update({
+            where: { id: item.leadId },
+            data: { exclusiveSoldAt: new Date() },
+          });
+        } else {
+          await tx.lead.update({
+            where: { id: item.leadId },
+            data: { sharedSalesCount: { increment: 1 } },
+          });
+        }
+      }
+
+      // কার্ট থেকে কেনা আইটেমগুলো মুছে ফেলা
+      const purchasedLeadIds = order.orderItems.map((oi) => oi.leadId);
+      await tx.cartItem.deleteMany({
+        where: {
+          userId: order.userId,
+          leadId: { in: purchasedLeadIds },
+        },
+      });
     });
   }
 }

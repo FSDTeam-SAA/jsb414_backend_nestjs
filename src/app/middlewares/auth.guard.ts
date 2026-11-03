@@ -19,6 +19,7 @@ export interface JwtPayload {
   role: string;
   purpose: 'access';
   passwordVersion: string;
+  permissions?: string[];
 }
 
 declare global {
@@ -66,7 +67,12 @@ export function AuthGuard(...roles: string[]): Type<CanActivate> {
       }
       if (roles.length && !roles.includes(user.role))
         throw new ForbiddenException('Forbidden');
-      request.user = { ...decoded, email: user.email, role: user.role };
+      request.user = {
+        ...decoded,
+        email: user.email,
+        role: user.role,
+        permissions: user.permissions || [],
+      };
       return true;
     }
   }

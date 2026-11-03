@@ -16,6 +16,10 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import pick from '../../helper/pick';
 import { AuthGuard } from '../../middlewares/auth.guard';
+import {
+  PermissionsGuard,
+  RequirePermissions,
+} from '../../middlewares/permissions.guard';
 import { CheckoutOrderDto } from './dto/checkout-order.dto';
 import { MyLeadsQueryDto } from './dto/my-leads-query.dto';
 import { MyOrdersQueryDto } from './dto/my-orders-query.dto';
@@ -97,7 +101,8 @@ export class OrderController {
 
   // ৫. অ্যাডমিনের জন্য সকল কাস্টমারের অর্ডার তালিকা
   @Get('admin/all-orders')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('ORDERS')
   @ApiOperation({
     summary: 'Get all customer orders (Admin/SuperAdmin only)',
   })

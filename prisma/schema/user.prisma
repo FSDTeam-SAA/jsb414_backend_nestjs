@@ -21,6 +21,9 @@ model User {
     interestedStates String[] @default([])
     interestedCities String[] @default([])
 
+    // সাব-অ্যাডমিনের নির্দিষ্ট পারমিশন (যেমন: LEADS, CUSTOMERS, ORDERS, SUPPORT, PRICING)
+    permissions      String[] @default([])
+
     createdPlans       Subscribe[]         @relation("SubscribeCreatedBy")
     updatedPlans       Subscribe[]         @relation("SubscribeUpdatedBy")
     userSubscribes     UserSubscribe[]

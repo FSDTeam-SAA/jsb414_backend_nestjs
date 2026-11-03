@@ -10,6 +10,7 @@ export const publicUserSelect = {
   leadTypes: true,
   interestedStates: true,
   interestedCities: true,
+  permissions: true,
   createdAt: true,
   updatedAt: true,
 } as const;

@@ -5,7 +5,6 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '../../../../prisma/generated/prisma/client';
-import buildWhereConditions from 'src/app/helper/buildWhereConditions';
 import paginationHelper, { IOptions } from 'src/app/helper/pagenation';
 import { IFilterParams } from 'src/app/helper/pick';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -42,6 +41,83 @@ export class MarketplaceService {
     };
   }
 
+  private queryValues(value: unknown) {
+    const values = Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === 'string')
+      : typeof value === 'string'
+        ? value.split(',')
+        : [];
+    return values
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  private queryNumber(value: unknown) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+  }
+
+  private queryDate(value: unknown) {
+    if (typeof value !== 'string' || !value.trim()) return undefined;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  }
+
+  private marketplaceWhere(
+    params: IFilterParams,
+    userId: string,
+  ): Prisma.LeadWhereInput {
+    const conditions: Prisma.LeadWhereInput[] = [
+      this.availableLeadConditions(userId),
+    ];
+    const searchTerm = typeof params.searchTerm === 'string' ? params.searchTerm.trim() : '';
+
+    if (searchTerm) {
+      conditions.push({
+        OR: ['city', 'state', 'county', 'zipcode', 'stage', 'propertyType'].map(
+          (field) => ({ [field]: { contains: searchTerm, mode: 'insensitive' } }),
+        ),
+      });
+    }
+
+    const categoryIds = this.queryValues(params.categoryId);
+    if (categoryIds.length) conditions.push({ categoryId: { in: categoryIds } });
+
+    const availability = this.queryValues(params.availability);
+    if (availability.length) conditions.push({ availability: { in: availability as any } });
+
+    (['city', 'state', 'county', 'zipcode', 'propertyType', 'stage'] as const).forEach(
+      (field) => {
+        const value = typeof params[field] === 'string' ? params[field].trim() : '';
+        if (value) conditions.push({ [field]: value });
+      },
+    );
+
+    const addNumberRange = (field: 'estValue' | 'estEquity' | 'mortgageBalance', minKey: string, maxKey: string) => {
+      const gte = this.queryNumber(params[minKey]);
+      const lte = this.queryNumber(params[maxKey]);
+      if (gte !== undefined || lte !== undefined) conditions.push({ [field]: { ...(gte !== undefined ? { gte } : {}), ...(lte !== undefined ? { lte } : {}) } });
+    };
+    addNumberRange('estValue', 'minEstValue', 'maxEstValue');
+    addNumberRange('estEquity', 'minEstEquity', 'maxEstEquity');
+    addNumberRange('mortgageBalance', 'minMortgageBalance', 'maxMortgageBalance');
+
+    const freshness = params.freshness;
+    const now = new Date();
+    let createdFrom = this.queryDate(params.createdFrom);
+    const createdTo = this.queryDate(params.createdTo);
+    if (freshness === 'today') createdFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (freshness === 'last7Days') createdFrom = new Date(now.getTime() - 7 * 86_400_000);
+    if (freshness === 'last30Days') createdFrom = new Date(now.getTime() - 30 * 86_400_000);
+    if (createdFrom || createdTo) conditions.push({ createdAt: { ...(createdFrom ? { gte: createdFrom } : {}), ...(createdTo ? { lte: createdTo } : {}) } });
+
+    if (params.contactData === 'phone') conditions.push({ phoneNumbers: { isEmpty: false } });
+    if (params.contactData === 'email') conditions.push({ emailAddresses: { isEmpty: false } });
+    if (params.contactData === 'both') conditions.push({ phoneNumbers: { isEmpty: false }, emailAddresses: { isEmpty: false } });
+
+    return { AND: conditions };
+  }
+
   // 1. মার্কেটপ্লেসের সকল লিড লিস্ট (কেনার পূর্বে সেনসিটিভ ডেটা ছাড়া)
   async getAllMarketPlace(
     params: IFilterParams,
@@ -49,22 +125,33 @@ export class MarketplaceService {
     userId: string,
   ) {
     const discountPercent = await this.discountFor(userId);
-    const { limit, page, skip, sortBy, sortOrder } = paginationHelper(options);
-
-    const searchableFields = [
-      'city',
-      'state',
-      'county',
-      'zipcode',
-      'stage',
-      'propertyType',
-    ];
-
-    const whereConditions = buildWhereConditions(
-      params,
-      searchableFields,
-      this.availableLeadConditions(userId),
-    );
+    const { limit, page, skip, sortBy: requestedSortBy, sortOrder: requestedSortOrder } = paginationHelper(options);
+    const sortBy = ['createdAt', 'estValue', 'estEquity', 'mortgageBalance', 'saleDate'].includes(requestedSortBy) ? requestedSortBy : 'createdAt';
+    const sortOrder = requestedSortOrder === 'asc' ? 'asc' : 'desc';
+    const whereConditions = this.marketplaceWhere(params, userId);
+    const select = {
+      id: true,
+      leadNumber: true,
+      city: true,
+      state: true,
+      county: true,
+      zipcode: true,
+      propertyType: true,
+      propertyImage: true,
+      estValue: true,
+      estEquity: true,
+      mortgageBalance: true,
+      saleDate: true,
+      stage: true,
+      availability: true,
+      sharedLimit: true,
+      sharedSalesCount: true,
+      createdAt: true,
+      category: { select: { id: true, name: true, sharedBasePrice: true, exclusiveBasePrice: true, agePricingEnabled: true } },
+    } as const;
+    const minPrice = this.queryNumber(params.minPrice);
+    const maxPrice = this.queryNumber(params.maxPrice);
+    const hasPriceFilter = minPrice !== undefined || maxPrice !== undefined;
 
     const [globalRules, data, total] = await Promise.all([
       this.prisma.agePriceRule.findMany({
@@ -72,53 +159,29 @@ export class MarketplaceService {
       }),
       this.prisma.lead.findMany({
         where: whereConditions,
-        select: {
-          id: true,
-          leadNumber: true,
-          city: true,
-          state: true,
-          county: true,
-          zipcode: true,
-          propertyType: true,
-          propertyImage: true,
-          estValue: true,
-          estEquity: true,
-          mortgageBalance: true,
-          saleDate: true,
-          stage: true,
-          availability: true,
-          sharedLimit: true,
-          sharedSalesCount: true,
-          createdAt: true,
-          category: {
-            select: {
-              id: true,
-              name: true,
-              sharedBasePrice: true,
-              exclusiveBasePrice: true,
-              agePricingEnabled: true,
-            },
-          },
-        },
-        skip,
-        take: limit,
+        select,
+        ...(hasPriceFilter ? {} : { skip, take: limit }),
         orderBy: {
           [sortBy]: sortOrder,
         },
       }),
-      this.prisma.lead.count({
-        where: whereConditions,
-      }),
+      hasPriceFilter ? Promise.resolve(0) : this.prisma.lead.count({ where: whereConditions }),
     ]);
+
+    const pricedData = data.map((lead) => this.withPrices(lead, discountPercent, globalRules));
+    const filteredData = hasPriceFilter
+      ? pricedData.filter((lead) => [lead.sharedPrice, lead.exclusivePrice].some((price) => price !== null && (minPrice === undefined || Number(price) >= minPrice) && (maxPrice === undefined || Number(price) <= maxPrice)))
+      : pricedData;
+    const filteredTotal = hasPriceFilter ? filteredData.length : total;
 
     return {
       meta: {
         page,
         limit,
-        total,
-        totalPage: Math.ceil(total / limit),
+        total: filteredTotal,
+        totalPage: Math.ceil(filteredTotal / limit),
       },
-      data: data.map((lead) => this.withPrices(lead, discountPercent, globalRules)),
+      data: hasPriceFilter ? filteredData.slice(skip, skip + limit) : filteredData,
     };
   }
 

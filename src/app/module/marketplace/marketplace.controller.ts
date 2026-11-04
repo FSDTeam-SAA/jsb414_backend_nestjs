@@ -38,6 +38,18 @@ export class MarketplaceController {
   @ApiQuery({ name: 'propertyType', required: false, type: 'string' })
   @ApiQuery({ name: 'stage', required: false, type: 'string' })
   @ApiQuery({ name: 'availability', required: false, type: 'string' })
+  @ApiQuery({ name: 'freshness', required: false, enum: ['today', 'last7Days', 'last30Days', 'custom'] })
+  @ApiQuery({ name: 'createdFrom', required: false, type: 'string', description: 'ISO date or date-time' })
+  @ApiQuery({ name: 'createdTo', required: false, type: 'string', description: 'ISO date or date-time' })
+  @ApiQuery({ name: 'minEstValue', required: false, type: 'number' })
+  @ApiQuery({ name: 'maxEstValue', required: false, type: 'number' })
+  @ApiQuery({ name: 'minEstEquity', required: false, type: 'number' })
+  @ApiQuery({ name: 'maxEstEquity', required: false, type: 'number' })
+  @ApiQuery({ name: 'minMortgageBalance', required: false, type: 'number' })
+  @ApiQuery({ name: 'maxMortgageBalance', required: false, type: 'number' })
+  @ApiQuery({ name: 'contactData', required: false, enum: ['phone', 'email', 'both'] })
+  @ApiQuery({ name: 'minPrice', required: false, type: 'number' })
+  @ApiQuery({ name: 'maxPrice', required: false, type: 'number' })
   @ApiQuery({ name: 'page', required: false, type: 'number' })
   @ApiQuery({ name: 'limit', required: false, type: 'number' })
   @ApiQuery({ name: 'sortBy', required: false, type: 'string' })
@@ -54,6 +66,18 @@ export class MarketplaceController {
       'propertyType',
       'stage',
       'availability',
+      'freshness',
+      'createdFrom',
+      'createdTo',
+      'minEstValue',
+      'maxEstValue',
+      'minEstEquity',
+      'maxEstEquity',
+      'minMortgageBalance',
+      'maxMortgageBalance',
+      'contactData',
+      'minPrice',
+      'maxPrice',
     ]);
     const options = pick(req.query, ['page', 'limit', 'sortBy', 'sortOrder']);
 

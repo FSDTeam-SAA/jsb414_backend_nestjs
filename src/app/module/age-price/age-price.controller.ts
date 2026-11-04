@@ -17,6 +17,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AuthGuard } from 'src/app/middlewares/auth.guard';
+import { PermissionsGuard } from 'src/app/middlewares/permissions.guard';
 import { AgePriceService } from './age-price.service';
 import { CreateAgePriceDto } from './dto/create-age-price.dto';
 import { UpdateAgePriceDto } from './dto/update-age-price.dto';
@@ -32,7 +33,7 @@ export class AgePriceController {
       'Create an age-based discount rule (e.g. 8 to 30 days: 15% discount)',
   })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('superadmin', 'admin'))
+  @UseGuards(AuthGuard('superadmin', 'admin'), PermissionsGuard)
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createAgePriceDto: CreateAgePriceDto) {
     const result = await this.agePriceService.createAgePrice(createAgePriceDto);
@@ -67,9 +68,9 @@ export class AgePriceController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update age price rule (Super Admin only)' })
+  @ApiOperation({ summary: 'Update age price rule' })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('superadmin'))
+  @UseGuards(AuthGuard('superadmin', 'admin'), PermissionsGuard)
   @HttpCode(HttpStatus.OK)
   async update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -83,9 +84,9 @@ export class AgePriceController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete age price rule (Super Admin only)' })
+  @ApiOperation({ summary: 'Delete age price rule' })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('superadmin'))
+  @UseGuards(AuthGuard('superadmin', 'admin'), PermissionsGuard)
   @HttpCode(HttpStatus.OK)
   async remove(@Param('id', ParseUUIDPipe) id: string) {
     const result = await this.agePriceService.remove(id);

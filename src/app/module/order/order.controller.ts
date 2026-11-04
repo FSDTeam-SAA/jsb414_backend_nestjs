@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query, 
   Req,
@@ -16,6 +17,14 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import pick from '../../helper/pick';
 import { AuthGuard } from '../../middlewares/auth.guard';
+import {
+  PermissionsGuard,
+  RequirePermissions,
+} from '../../middlewares/permissions.guard';
+import {
+  ReviewBadLeadRequestDto,
+  SubmitBadLeadRequestDto,
+} from './dto/bad-lead-request.dto';
 import { CheckoutOrderDto } from './dto/checkout-order.dto';
 import { MyLeadsQueryDto } from './dto/my-leads-query.dto';
 import { MyOrdersQueryDto } from './dto/my-orders-query.dto';
@@ -97,7 +106,8 @@ export class OrderController {
 
   // ৫. অ্যাডমিনের জন্য সকল কাস্টমারের অর্ডার তালিকা
   @Get('admin/all-orders')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('ORDERS')
   @ApiOperation({
     summary: 'Get all customer orders (Admin/SuperAdmin only)',
   })
@@ -112,6 +122,62 @@ export class OrderController {
       meta: result.meta,
       data: result.data,
     };
+  }
+
+  // ৭. কাস্টমার কর্তৃক ব্যাড লিড / ক্রেডিট রিকোয়েস্ট সাবমিট করা (৭ দিনের মধ্যে)
+  @Post('bad-lead-request')
+  @UseGuards(AuthGuard())
+  @ApiOperation({
+    summary:
+      'Customer submits a Bad Lead / Credit Request (within 7 days of purchase)',
+  })
+  @HttpCode(HttpStatus.CREATED)
+  async submitBadLeadRequest(
+    @Req() req: Request,
+    @Body() dto: SubmitBadLeadRequestDto,
+  ) {
+    const userId = req.user!.id;
+    return this.orderService.submitBadLeadRequest(userId, dto);
+  }
+
+  // ৮. অ্যাডমিনের জন্য সকল ব্যাড লিড রিকোয়েস্টের তালিকা
+  @Get('admin/bad-lead-requests')
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('SUPPORT')
+  @ApiOperation({
+    summary: 'Admin lists all Bad Lead / Credit Requests',
+  })
+  @HttpCode(HttpStatus.OK)
+  async getAllBadLeadRequestsAdmin(@Query() query: any) {
+    const filters = pick(query, ['status', 'reason']);
+    const options = pick(query, ['page', 'limit', 'sortBy', 'sortOrder']);
+    const result = await this.orderService.getAllBadLeadRequestsAdmin(
+      filters,
+      options,
+    );
+    return {
+      message: 'Bad lead requests fetched successfully',
+      meta: result.meta,
+      data: result.data,
+    };
+  }
+
+  // ৯. অ্যাডমিন কর্তৃক ব্যাড লিড রিকোয়েস্ট অ্যাপ্রুভ বা রিজেক্ট করা
+  @Patch('admin/bad-lead-request/:id/review')
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('SUPPORT')
+  @ApiOperation({
+    summary:
+      'Admin approves (returns account credit to wallet) or rejects a Bad Lead Request',
+  })
+  @HttpCode(HttpStatus.OK)
+  async reviewBadLeadRequest(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+    @Body() dto: ReviewBadLeadRequestDto,
+  ) {
+    const reviewerId = req.user!.id;
+    return this.orderService.reviewBadLeadRequest(id, reviewerId, dto);
   }
 
   // ৬. একক অর্ডারের ইনভয়েস ও বিস্তারিত বিবরণ

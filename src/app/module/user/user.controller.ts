@@ -1,12 +1,14 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   Req,
   UploadedFile,
@@ -25,6 +27,11 @@ import type { Request } from 'express';
 import { fileUpload } from '../../helper/fileUploder';
 import pick from '../../helper/pick';
 import { AuthGuard } from '../../middlewares/auth.guard';
+import {
+  PermissionsGuard,
+  RequirePermissions,
+} from '../../middlewares/permissions.guard';
+import { CreateAdminDto, UpdateAdminPermissionsDto } from './dto/create-admin.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateInterestsDto } from './dto/update-interests.dto';
 import { UserService } from './user.service';
@@ -39,7 +46,8 @@ export class UserController {
   @ApiOperation({
     summary: 'get all user',
   })
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('CUSTOMERS')
   @ApiBearerAuth('access-token')
   @ApiQuery({
     name: 'searchTerm',
@@ -154,6 +162,92 @@ export class UserController {
     };
   }
 
+  // =========================================================================
+  // সাব-অ্যাডমিন রোল ও পারমিশন ম্যানেজমেন্ট (শুধুমাত্র Super Admin)
+  // =========================================================================
+
+  @Post('admin/create-admin')
+  @UseGuards(AuthGuard('superadmin'))
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary:
+      'Super Admin creates a new staff admin with roles/permissions and emails credentials',
+  })
+  @HttpCode(HttpStatus.CREATED)
+  async createAdmin(@Body() dto: CreateAdminDto) {
+    const result = await this.userService.createAdminBySuperAdmin(dto);
+    return {
+      message: result.message,
+      data: result.admin,
+    };
+  }
+
+  @Get('admin/admins')
+  @UseGuards(AuthGuard('superadmin'))
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Super Admin gets all staff admins with their assigned permissions',
+  })
+  @HttpCode(HttpStatus.OK)
+  async getAllAdmins(@Query() query: UserQueryDto) {
+    const filters = pick(query, ['searchTerm']);
+    const options = pick(query, ['page', 'limit', 'sortBy', 'sortOrder']);
+    const result = await this.userService.getAllAdmins(filters, options);
+
+    return {
+      message: 'Staff admins fetched successfully',
+      meta: result.meta,
+      data: result.data,
+    };
+  }
+
+  @Patch('admin/:id/permissions')
+  @UseGuards(AuthGuard('superadmin'))
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Super Admin updates permissions of a staff admin',
+  })
+  @HttpCode(HttpStatus.OK)
+  async updateAdminPermissions(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAdminPermissionsDto,
+  ) {
+    const result = await this.userService.updateAdminPermissions(id, dto);
+    return result;
+  }
+
+  @Delete('admin/:id')
+  @UseGuards(AuthGuard('superadmin'))
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Super Admin removes a staff admin',
+  })
+  @HttpCode(HttpStatus.OK)
+  async deleteAdmin(@Param('id', ParseUUIDPipe) id: string) {
+    return this.userService.deleteAdmin(id);
+  }
+
+  // =========================================================================
+  // কাস্টমার ম্যানেজমেন্ট: একক কাস্টমারের সম্পূর্ণ বিবরণ (Section 43)
+  // =========================================================================
+
+  @Get('customer/:id')
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('CUSTOMERS')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary:
+      'Admin gets full customer details: profile, active membership, purchased leads, financial summary, and bad lead requests (Section 43)',
+  })
+  @HttpCode(HttpStatus.OK)
+  async getCustomerDetails(@Param('id', ParseUUIDPipe) id: string) {
+    const result = await this.userService.getCustomerDetails(id);
+    return {
+      message: 'Customer details fetched successfully',
+      data: result,
+    };
+  }
+
   @Get(':id')
   @UseGuards(AuthGuard('admin', 'superadmin'))
   @ApiBearerAuth('access-token')
@@ -171,7 +265,8 @@ export class UserController {
   }
 
   @Patch(':id')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('CUSTOMERS')
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'update user by id (Admin)',

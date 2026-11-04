@@ -25,12 +25,18 @@ import type { Request } from 'express';
 import { fileUpload } from 'src/app/helper/fileUploder';
 import pick from 'src/app/helper/pick';
 import { AuthGuard } from 'src/app/middlewares/auth.guard';
+import {
+  PermissionsGuard,
+  RequirePermissions,
+} from 'src/app/middlewares/permissions.guard';
 import { BulkUploadLeadDto } from './dto/bulk-upload-lead.dto';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
 import { LeadService } from './lead.service';
 
 @ApiTags('Leads')
+@UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+@RequirePermissions('LEADS')
 @Controller('lead')
 export class LeadController {
   constructor(private readonly leadService: LeadService) {}
@@ -41,7 +47,6 @@ export class LeadController {
   })
   @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
   @UseInterceptors(FileInterceptor('propertyImage', fileUpload.uploadConfig))
   @HttpCode(HttpStatus.CREATED)
   async createLead(
@@ -68,7 +73,6 @@ export class LeadController {
   })
   @ApiConsumes('multipart/form-data')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
   @UseInterceptors(FileInterceptor('file', fileUpload.documentUploadConfig))
   @HttpCode(HttpStatus.CREATED)
   async bulkUploadLeads(
@@ -105,7 +109,6 @@ export class LeadController {
   @ApiQuery({ name: 'sortBy', required: false, type: 'string' })
   @ApiQuery({ name: 'sortOrder', required: false, type: 'string' })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
   @HttpCode(HttpStatus.OK)
   async getAllLeads(@Req() req: Request) {
     const filters = pick(req.query, [
@@ -134,7 +137,6 @@ export class LeadController {
     summary: 'Lead overview',
   })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('superadmin', 'admin'))
   @HttpCode(HttpStatus.OK)
   async leadOverview() {
     const result = await this.leadService.leadOverview();
@@ -149,7 +151,6 @@ export class LeadController {
     summary: 'Get a single lead by ID',
   })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
   @HttpCode(HttpStatus.OK)
   async getLeadById(@Param('id') id: string) {
     const result = await this.leadService.getSingleLead(id);
@@ -165,7 +166,6 @@ export class LeadController {
   })
   @ApiConsumes('multipart/form-data')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
   @UseInterceptors(FileInterceptor('propertyImage', fileUpload.uploadConfig))
   @HttpCode(HttpStatus.OK)
   async updateLead(
@@ -185,7 +185,6 @@ export class LeadController {
     summary: 'Delete a lead by ID',
   })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
   @HttpCode(HttpStatus.OK)
   async deleteLead(@Param('id') id: string) {
     const result = await this.leadService.deleteLead(id);

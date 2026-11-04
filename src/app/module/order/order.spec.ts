@@ -73,6 +73,20 @@ describe('OrderService', () => {
       userSubscribe: {
         findFirst: jest.fn().mockResolvedValue(null),
       },
+      badLeadRequest: {
+        create: jest.fn().mockImplementation(({ data }: any) => ({
+          id: 'blr_1',
+          ...data,
+          lead: { id: 'l_1', leadNumber: 101, city: 'Tampa', state: 'FL' },
+        })),
+        findUnique: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn(),
+        update: jest.fn().mockImplementation(({ data }: any) => ({
+          id: 'blr_1',
+          ...data,
+        })),
+      },
       $transaction: jest.fn(async (cb: any) => cb(db)),
     };
 
@@ -439,6 +453,79 @@ describe('OrderService', () => {
       expect(result.meta.total).toBe(1);
       expect(result.data[0].orderNumber).toBe('FG-ORD-10001');
       expect(result.data[0].cardPaid).toBe(40);
+    });
+  });
+
+  describe('submitBadLeadRequest', () => {
+    it('throws NotFoundException if user did not purchase the lead', async () => {
+      db.userLead.findUnique.mockResolvedValueOnce(null);
+
+      await expect(
+        service.submitBadLeadRequest(userId, {
+          leadId: 'l_not_bought',
+          reason: 'INVALID_PHONE' as any,
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('submits a bad lead request within 7 days', async () => {
+      db.userLead.findUnique.mockResolvedValueOnce({
+        userId,
+        leadId: 'l_1',
+        purchasedAt: new Date(), // today
+        lead: { leadNumber: 101 },
+      });
+      db.badLeadRequest.findUnique.mockResolvedValueOnce(null);
+
+      const result = await service.submitBadLeadRequest(userId, {
+        leadId: 'l_1',
+        reason: 'INVALID_PHONE' as any,
+        explanation: 'Disconnected',
+      });
+
+      expect(result.message).toContain('submitted successfully');
+      expect(db.badLeadRequest.create).toHaveBeenCalled();
+    });
+  });
+
+  describe('reviewBadLeadRequest', () => {
+    it('approves bad lead request and refunds account credit to wallet', async () => {
+      db.badLeadRequest.findUnique.mockResolvedValueOnce({
+        id: 'blr_1',
+        userId,
+        leadId: 'l_1',
+        status: 'PENDING',
+        reason: 'INVALID_PHONE',
+        lead: { id: 'l_1', leadNumber: 101 },
+      });
+
+      db.userLead.findUnique.mockResolvedValueOnce({
+        userId,
+        leadId: 'l_1',
+        pricePaid: new Prisma.Decimal('25.00'),
+      });
+
+      db.user.update.mockResolvedValueOnce({ walletBalance: new Prisma.Decimal('125.00') });
+
+      const result = await service.reviewBadLeadRequest('blr_1', 'admin_1', {
+        status: 'APPROVED',
+        adminNotes: 'Verified disconnected phone',
+      });
+
+      expect(result.message).toContain('account credit returned');
+      expect(db.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { walletBalance: { increment: 25 } },
+        }),
+      );
+      expect(db.walletTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            type: 'REFUND',
+            amount: 25,
+          }),
+        }),
+      );
     });
   });
 });

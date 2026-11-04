@@ -22,6 +22,7 @@ import {
 import type { Request } from 'express';
 import pick from '../../helper/pick';
 import { AuthGuard } from '../../middlewares/auth.guard';
+import { PermissionsGuard } from '../../middlewares/permissions.guard';
 import { CreateSubscriptionPaymentDto } from './dto/create-subscription-payment.dto';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { SubscriptionQueryDto } from './dto/subscription-query.dto';
@@ -35,7 +36,7 @@ export class SubscriptionController {
 
   @Get()
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
   @ApiOperation({ summary: 'Get all subscription plans (Admin)' })
   @ApiQuery({
     name: 'searchTerm',
@@ -116,7 +117,7 @@ export class SubscriptionController {
   @Post()
   @ApiOperation({ summary: 'Create subscription plan (Admin)' })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
   @HttpCode(HttpStatus.CREATED)
   async createSubscribe(
     @Req() req: Request,
@@ -164,7 +165,7 @@ export class SubscriptionController {
 
   @Get('overview')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
   @ApiOperation({
     summary: 'Get subscription dashboard overview metrics (Admin)',
     description:
@@ -181,7 +182,7 @@ export class SubscriptionController {
 
   @Get('recent-users')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
   @ApiOperation({
     summary: 'Get recent subscribed users (Admin)',
     description:
@@ -259,7 +260,7 @@ export class SubscriptionController {
 
   @Get(':id')
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
   @ApiOperation({ summary: 'Get subscription plan by id' })
   @HttpCode(HttpStatus.OK)
   async getSubscribeById(@Param('id', ParseUUIDPipe) id: string) {
@@ -272,7 +273,7 @@ export class SubscriptionController {
   @Patch(':id')
   @ApiOperation({ summary: 'Update or deactivate subscription plan' })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
   async updateSubscribe(
     @Req() req: Request,
     @Param('id', ParseUUIDPipe) id: string,
@@ -291,7 +292,7 @@ export class SubscriptionController {
   @Delete(':id')
   @ApiOperation({ summary: 'Delete subscription plan' })
   @ApiBearerAuth('access-token')
-  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
   async deleteSubscribe(
     @Req() req: Request,
     @Param('id', ParseUUIDPipe) id: string,

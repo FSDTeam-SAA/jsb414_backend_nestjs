@@ -16,6 +16,10 @@ import {
   calculateDynamicLeadPrice,
   inventoryAge,
 } from '../../helper/pricing.helper';
+import {
+  ReviewBadLeadRequestDto,
+  SubmitBadLeadRequestDto,
+} from './dto/bad-lead-request.dto';
 import { CheckoutOrderDto } from './dto/checkout-order.dto';
 
 @Injectable()
@@ -128,7 +132,10 @@ export class OrderService {
           );
         }
       } else {
-        if (lead.exclusiveSoldAt !== null || lead.availability === 'EXCLUSIVE') {
+        if (
+          lead.exclusiveSoldAt !== null ||
+          lead.availability === 'EXCLUSIVE'
+        ) {
           throw new BadRequestException(
             `Lead #${lead.leadNumber} has been exclusively sold`,
           );
@@ -818,6 +825,220 @@ export class OrderService {
         itemsCount: o.orderItems.length,
         createdAt: o.createdAt,
       })),
+    };
+  }
+
+  // ৭. কাস্টমার কর্তৃক ব্যাড লিড / ক্রেডিট রিকোয়েস্ট সাবমিট (Section 34)
+  async submitBadLeadRequest(userId: string, dto: SubmitBadLeadRequestDto) {
+    const userLead = await this.prisma.userLead.findUnique({
+      where: {
+        userId_leadId: {
+          userId,
+          leadId: dto.leadId,
+        },
+      },
+      include: {
+        lead: {
+          select: { leadNumber: true },
+        },
+      },
+    });
+
+    if (!userLead) {
+      throw new NotFoundException(
+        'You have not purchased this lead or lead not found',
+      );
+    }
+
+    // ৭ দিনের উইন্ডো যাচাই (Client doc Section 34: 7 days from purchase)
+    const purchasedTime = new Date(userLead.purchasedAt).getTime();
+    const daysSincePurchase =
+      (Date.now() - purchasedTime) / (1000 * 60 * 60 * 24);
+    if (daysSincePurchase > 7) {
+      throw new BadRequestException(
+        'Bad lead credit requests must be submitted within 7 days of purchase',
+      );
+    }
+
+    const existing = await this.prisma.badLeadRequest.findUnique({
+      where: {
+        userId_leadId: {
+          userId,
+          leadId: dto.leadId,
+        },
+      },
+    });
+
+    if (existing) {
+      throw new BadRequestException(
+        `A bad lead request for this lead has already been submitted (Current status: ${existing.status})`,
+      );
+    }
+
+    const request = await this.prisma.badLeadRequest.create({
+      data: {
+        userId,
+        leadId: dto.leadId,
+        reason: dto.reason,
+        explanation: dto.explanation || null,
+        status: 'PENDING',
+      },
+      include: {
+        lead: {
+          select: {
+            id: true,
+            leadNumber: true,
+            city: true,
+            state: true,
+          },
+        },
+      },
+    });
+
+    return {
+      message:
+        'Bad lead credit request submitted successfully. Our team will review within 24-48 hours.',
+      data: request,
+    };
+  }
+
+  // ৮. অ্যাডমিনের জন্য সকল ব্যাড লিড রিকোয়েস্টের তালিকা
+  async getAllBadLeadRequestsAdmin(params: IFilterParams, options: IOptions) {
+    const { page, limit, skip, sortBy, sortOrder } = paginationHelper(options);
+
+    const andConditions: any[] = [];
+    if (params.status) {
+      andConditions.push({ status: params.status });
+    }
+    if (params.reason) {
+      andConditions.push({ reason: params.reason });
+    }
+
+    const where = andConditions.length > 0 ? { AND: andConditions } : {};
+
+    const [requests, total] = await Promise.all([
+      this.prisma.badLeadRequest.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: {
+          [sortBy || 'createdAt']: sortOrder || 'desc',
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          lead: {
+            select: {
+              id: true,
+              leadNumber: true,
+              propertyAddress: true,
+              city: true,
+              state: true,
+              phoneNumbers: true,
+              emailAddresses: true,
+            },
+          },
+        },
+      }),
+      this.prisma.badLeadRequest.count({ where }),
+    ]);
+
+    return {
+      meta: {
+        page,
+        limit,
+        total,
+        totalPage: Math.ceil(total / limit),
+      },
+      data: requests,
+    };
+  }
+
+  // ৯. অ্যাডমিন কর্তৃক ব্যাড লিড রিকোয়েস্ট অ্যাপ্রুভ অথবা রিজেক্ট করা (সেকশন ৩৪: অ্যাকাউন্ট ক্রেডিট রিফান্ড)
+  async reviewBadLeadRequest(
+    id: string,
+    reviewerId: string,
+    dto: ReviewBadLeadRequestDto,
+  ) {
+    const request = await this.prisma.badLeadRequest.findUnique({
+      where: { id },
+      include: {
+        lead: { select: { id: true, leadNumber: true } },
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Bad lead request not found');
+    }
+
+    if (request.status !== 'PENDING') {
+      throw new BadRequestException(
+        `This request has already been processed with status: ${request.status}`,
+      );
+    }
+
+    const userLead = await this.prisma.userLead.findUnique({
+      where: {
+        userId_leadId: {
+          userId: request.userId,
+          leadId: request.leadId,
+        },
+      },
+    });
+
+    const creditReturned = userLead ? Number(userLead.pricePaid) : 0;
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      // যদি অ্যাপ্রুভ করা হয়, তবে ইউজারের ওয়ালেটে অ্যাকাউন্ট ক্রেডিট যোগ করা হবে
+      if (dto.status === 'APPROVED' && creditReturned > 0) {
+        const user = await tx.user.update({
+          where: { id: request.userId },
+          data: {
+            walletBalance: { increment: creditReturned },
+          },
+          select: { walletBalance: true },
+        });
+
+        await tx.walletTransaction.create({
+          data: {
+            userId: request.userId,
+            amount: creditReturned,
+            balanceAfter: user.walletBalance,
+            type: 'REFUND',
+            referenceId: request.id,
+            operationKey: `bad_lead_refund:${request.id}`,
+            description: `Account credit for Bad Lead #${request.lead.leadNumber} (${request.reason})`,
+            actorId: reviewerId,
+          },
+        });
+      }
+
+      const updated = await tx.badLeadRequest.update({
+        where: { id },
+        data: {
+          status: dto.status,
+          creditReturned: dto.status === 'APPROVED' ? creditReturned : null,
+          adminNotes: dto.adminNotes || null,
+          reviewedById: reviewerId,
+          reviewedAt: new Date(),
+        },
+      });
+
+      return updated;
+    });
+
+    return {
+      message:
+        dto.status === 'APPROVED'
+          ? `Request approved. $${creditReturned.toFixed(2)} account credit returned to user wallet.`
+          : 'Request rejected.',
+      data: result,
     };
   }
 }

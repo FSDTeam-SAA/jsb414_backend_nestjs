@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
@@ -22,6 +23,7 @@ export class CreatePromoCodeDto {
     example: 5,
     description: 'Code Discount ($ amount, Figma: "Code Discount")',
   })
+  @Type(() => Number)
   @IsNumber()
   @Min(1, { message: 'Code Discount must be at least $1' })
   discount!: number;
@@ -31,6 +33,7 @@ export class CreatePromoCodeDto {
     description:
       'Claimed User (Max claim limit, Figma: "Claimed User" / "Claimed")',
   })
+  @Type(() => Number)
   @IsInt()
   @Min(1, { message: 'Claimed User must be at least 1' })
   claimedUser!: number;

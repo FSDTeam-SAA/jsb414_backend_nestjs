@@ -18,16 +18,17 @@ FROM builder AS migration
 USER node
 CMD ["./node_modules/.bin/prisma", "migrate", "deploy"]
 
-FROM builder AS production-dependencies
-RUN npm prune --omit=dev --ignore-scripts
-
 FROM node:26.7.0-bookworm-slim AS production
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=production-dependencies --chown=node:node /usr/src/app/node_modules ./node_modules
+# Railway pre-deploy uses the pinned Prisma CLI, including its dependencies.
+COPY --from=builder --chown=node:node /usr/src/app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /usr/src/app/dist ./dist
+COPY --from=builder --chown=node:node /usr/src/app/prisma.config.ts ./prisma.config.ts
+COPY --from=builder --chown=node:node /usr/src/app/prisma/schema ./prisma/schema
+COPY --from=builder --chown=node:node /usr/src/app/prisma/migrations ./prisma/migrations
 COPY --chown=node:node package.json ./
 USER node
 EXPOSE 3000

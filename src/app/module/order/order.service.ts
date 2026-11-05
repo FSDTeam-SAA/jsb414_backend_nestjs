@@ -16,6 +16,7 @@ import {
   calculateDynamicLeadPrice,
   inventoryAge,
 } from '../../helper/pricing.helper';
+import { PromoCodeService } from '../promo-code/promo-code.service';
 import {
   ReviewBadLeadRequestDto,
   SubmitBadLeadRequestDto,
@@ -24,7 +25,10 @@ import { CheckoutOrderDto } from './dto/checkout-order.dto';
 
 @Injectable()
 export class OrderService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly promoCodeService: PromoCodeService,
+  ) {}
 
   private getStripe() {
     if (!config.stripe.secretKey) {
@@ -196,6 +200,27 @@ export class OrderService {
     totalDiscount = Math.round(totalDiscount * 100) / 100;
     totalAmount = Math.round(totalAmount * 100) / 100;
 
+    // ৩. প্রোমো কোড যাচাই ও অতিরিক্ত ডিসকাউন্ট হিসাব
+    let promoDiscount = 0;
+    let promoCodeId: string | null = null;
+    let promoCodeStr: string | null = null;
+
+    if (dto.promoCode && dto.promoCode.trim()) {
+      const promoRes = await this.promoCodeService.validatePromoCode(userId, {
+        code: dto.promoCode.trim(),
+        subtotal: totalAmount,
+      });
+
+      promoDiscount = promoRes.discountAmount;
+      promoCodeId = promoRes.promoCodeId;
+      promoCodeStr = promoRes.code;
+      totalDiscount = Math.round((totalDiscount + promoDiscount) * 100) / 100;
+      totalAmount = Math.max(
+        0,
+        Math.round((totalAmount - promoDiscount) * 100) / 100,
+      );
+    }
+
     const walletBalance = Number(user.walletBalance || 0);
     const useWallet = dto.useWallet !== false;
     const walletUsed = useWallet ? Math.min(walletBalance, totalAmount) : 0;
@@ -218,12 +243,24 @@ export class OrderService {
             orderNumber,
             subtotal,
             discount: totalDiscount,
+            promoDiscount,
+            promoCodeId,
             totalAmount,
             walletUsed,
             cardPaid: 0,
             status: 'COMPLETED',
           },
         });
+
+        if (promoCodeId && promoDiscount > 0) {
+          await this.promoCodeService.recordUsage(
+            tx,
+            promoCodeId,
+            userId,
+            newOrder.id,
+            promoDiscount,
+          );
+        }
 
         await tx.orderItem.createMany({
           data: preparedItems.map((pi) => ({
@@ -290,6 +327,10 @@ export class OrderService {
         orderId: order.id,
         orderNumber: order.orderNumber,
         checkoutUrl: null,
+        subtotal,
+        discount: totalDiscount,
+        promoDiscount,
+        promoCode: promoCodeStr,
         totalAmount,
         walletUsed,
         cardPaid: 0,
@@ -306,6 +347,8 @@ export class OrderService {
           orderNumber,
           subtotal,
           discount: totalDiscount,
+          promoDiscount,
+          promoCodeId,
           totalAmount,
           walletUsed,
           cardPaid: cardNeeded,
@@ -367,6 +410,10 @@ export class OrderService {
       orderId: order.id,
       orderNumber: order.orderNumber,
       checkoutUrl: session.url,
+      subtotal,
+      discount: totalDiscount,
+      promoDiscount,
+      promoCode: promoCodeStr,
       totalAmount,
       walletUsed,
       cardPaid: cardNeeded,
@@ -621,6 +668,7 @@ export class OrderService {
           [sortField]: sortOrder || 'desc',
         },
         include: {
+          promoCode: { select: { code: true } },
           orderItems: {
             include: {
               lead: {
@@ -644,6 +692,8 @@ export class OrderService {
       orderNumber: o.orderNumber,
       subtotal: Number(o.subtotal),
       discount: Number(o.discount),
+      promoDiscount: Number(o.promoDiscount || 0),
+      promoCode: o.promoCode?.code || null,
       totalAmount: Number(o.totalAmount),
       walletUsed: Number(o.walletUsed),
       cardPaid: Number(o.cardPaid),
@@ -690,6 +740,13 @@ export class OrderService {
             },
           },
         },
+        promoCode: {
+          select: {
+            code: true,
+            discountType: true,
+            discountValue: true,
+          },
+        },
         user: {
           select: {
             id: true,
@@ -720,6 +777,14 @@ export class OrderService {
       user: order.user,
       subtotal: Number(order.subtotal),
       discount: Number(order.discount),
+      promoDiscount: Number(order.promoDiscount || 0),
+      promoCode: order.promoCode
+        ? {
+            code: order.promoCode.code,
+            discountType: order.promoCode.discountType,
+            discountValue: Number(order.promoCode.discountValue),
+          }
+        : null,
       totalAmount: Number(order.totalAmount),
       walletUsed: Number(order.walletUsed),
       cardPaid: Number(order.cardPaid),
@@ -799,6 +864,11 @@ export class OrderService {
               email: true,
             },
           },
+          promoCode: {
+            select: {
+              code: true,
+            },
+          },
           orderItems: true,
         },
       }),
@@ -818,6 +888,8 @@ export class OrderService {
         user: o.user,
         subtotal: Number(o.subtotal),
         discount: Number(o.discount),
+        promoDiscount: Number(o.promoDiscount || 0),
+        promoCode: o.promoCode?.code || null,
         totalAmount: Number(o.totalAmount),
         walletUsed: Number(o.walletUsed),
         cardPaid: Number(o.cardPaid),

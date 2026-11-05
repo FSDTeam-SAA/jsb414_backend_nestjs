@@ -1,0 +1,55 @@
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum PromoApplicableTo {
+  ALL
+  LEADS
+  SUBSCRIPTION
+}
+
+model PromoCode {
+  id          String   @id @default(uuid())
+  code        String   @unique // Code Name (Figma: "Code Name", e.g. WELCOME)
+  discount    Int      @default(0) // Code Discount (Figma: "Code Discount", e.g. $5, $20)
+  claimedUser Int      @default(100) // Claimed User limit (Figma: "Claimed User", e.g. 150)
+  usedCount   Int      @default(0) // Total times claimed
+  isActive    Boolean  @default(true) // Activity toggle (Figma: "Activity" ON/OFF switch)
+
+  // Backward compatibility fields
+  userLimit      Int?
+  applicableTo   PromoApplicableTo? @default(ALL)
+  description    String?
+  discountType   DiscountType?      @default(FIXED)
+  discountValue  Decimal?           @db.Decimal(10, 2)
+  minOrderAmount Decimal?           @default(0) @db.Decimal(10, 2)
+  maxDiscount    Decimal?           @db.Decimal(10, 2)
+  startDate      DateTime?          @default(now())
+  endDate        DateTime?
+  usageLimit     Int?
+
+  orders Order[]
+  usages PromoCodeUsage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("promo_codes")
+}
+
+model PromoCodeUsage {
+  id             String    @id @default(uuid())
+  promoCodeId    String
+  promoCode      PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId        String?
+  order          Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  discountAmount Decimal   @db.Decimal(10, 2)
+
+  usedAt DateTime @default(now())
+
+  @@index([userId, promoCodeId])
+  @@map("promo_code_usages")
+}

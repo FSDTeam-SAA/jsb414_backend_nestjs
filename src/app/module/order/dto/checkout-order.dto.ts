@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsOptional, IsUUID } from 'class-validator';
+import { IsArray, IsBoolean, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CheckoutOrderDto {
   @ApiPropertyOptional({
@@ -20,4 +20,12 @@ export class CheckoutOrderDto {
   @IsOptional()
   @IsBoolean()
   useWallet?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Promo code / coupon for additional discount (e.g. GOLD20)',
+    example: 'GOLD20',
+  })
+  @IsOptional()
+  @IsString()
+  promoCode?: string;
 }

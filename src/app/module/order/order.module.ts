@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
-import { OrderService } from './order.service';
+import { PromoCodeModule } from '../promo-code/promo-code.module';
 import { OrderController } from './order.controller';
+import { OrderService } from './order.service';
 
 @Module({
+  imports: [PromoCodeModule],
   controllers: [OrderController],
   providers: [OrderService],
 })

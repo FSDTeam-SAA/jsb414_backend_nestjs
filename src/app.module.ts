@@ -19,6 +19,7 @@ import { WalletModule } from './app/module/wallet/wallet.module';
 import { WebhookModule } from './app/module/webhook/webhook.module';
 import { ContactupModule } from './app/module/contactup/contactup.module';
 import { AddAdminModule } from './app/module/add-admin/add-admin.module';
+import { PromoCodeModule } from './app/module/promo-code/promo-code.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { AddAdminModule } from './app/module/add-admin/add-admin.module';
     WebhookModule,
     ContactupModule,
     AddAdminModule,
+    PromoCodeModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

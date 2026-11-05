@@ -90,7 +90,22 @@ describe('OrderService', () => {
       $transaction: jest.fn(async (cb: any) => cb(db)),
     };
 
-    service = new OrderService(db as PrismaService);
+    const promoCodeServiceMock: any = {
+      validatePromoCode: jest.fn().mockImplementation((userId, dto) => ({
+        valid: true,
+        promoCodeId: 'promo_1',
+        code: dto.code.toUpperCase(),
+        discountType: 'PERCENTAGE',
+        discountValue: 20,
+        discountAmount: Math.round(dto.subtotal * 0.2 * 100) / 100,
+        subtotal: dto.subtotal,
+        finalAmount: Math.round(dto.subtotal * 0.8 * 100) / 100,
+        message: 'Promo code applied',
+      })),
+      recordUsage: jest.fn().mockResolvedValue(true),
+    };
+
+    service = new OrderService(db as PrismaService, promoCodeServiceMock);
   });
 
   describe('checkout', () => {

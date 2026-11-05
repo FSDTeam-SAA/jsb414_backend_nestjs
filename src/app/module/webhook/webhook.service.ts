@@ -341,6 +341,25 @@ export class WebhookService {
         }
       }
 
+      // যদি অর্ডারে প্রোমো কোড ব্যবহার করা হয়ে থাকে
+      if (order.promoCodeId && Number(order.promoDiscount || 0) > 0) {
+        await tx.promoCode.update({
+          where: { id: order.promoCodeId },
+          data: {
+            usedCount: { increment: 1 },
+          },
+        });
+
+        await tx.promoCodeUsage.create({
+          data: {
+            promoCodeId: order.promoCodeId,
+            userId: order.userId,
+            orderId: order.id,
+            discountAmount: order.promoDiscount,
+          },
+        });
+      }
+
       // কার্ট থেকে কেনা আইটেমগুলো মুছে ফেলা
       const purchasedLeadIds = order.orderItems.map((oi) => oi.leadId);
       await tx.cartItem.deleteMany({

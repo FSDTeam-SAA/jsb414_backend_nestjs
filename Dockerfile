@@ -4,9 +4,13 @@ WORKDIR /usr/src/app
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY package*.json .npmrc ./
-RUN npm ci
+# npm ci runs postinstall (prisma generate), so its inputs must already exist.
+COPY prisma.config.ts ./
+COPY prisma/schema ./prisma/schema
+# Generation needs no live database. Keep this placeholder local to the build step.
+RUN DATABASE_URL=postgresql://build:build@localhost:5432/build_only npm ci
 COPY . .
-RUN npm run generate && npm run build
+RUN npm run build
 
 # This image has the pinned Prisma CLI. Run it once per deployment.
 FROM builder AS migration

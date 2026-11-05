@@ -10,7 +10,8 @@ COPY prisma/schema ./prisma/schema
 # Generation needs no live database. Keep this placeholder local to the build step.
 RUN DATABASE_URL=postgresql://build:build@localhost:5432/build_only npm ci
 COPY . .
-RUN npm run build
+RUN npm run build \
+    && node -e "require('./dist/prisma/generated/prisma/client.js')"
 
 # This image has the pinned Prisma CLI. Run it once per deployment.
 FROM builder AS migration

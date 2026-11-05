@@ -68,3 +68,13 @@ enum WalletTransactionType {
     REFUND // ব্যাড লিডের টাকা রিফান্ড পেয়ে ওয়ালেটে যোগ হয়েছে
     ADMIN_ADJUSTMENT // অ্যাডমিন কোনো বোনাস বা ব্যালেন্স অ্যাডজাস্ট করেছে
 }
+
+enum NotificationType {
+    ORDER
+    BAD_LEAD_REQUEST
+    SUPPORT_REPLY
+    SAVED_SEARCH_ALERT
+    WALLET_TRANSACTION
+    ACCOUNT_DELETION
+    SYSTEM
+}

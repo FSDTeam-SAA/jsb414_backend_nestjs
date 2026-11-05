@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
-import { ContactupService } from './contactup.service';
+import { NotificationModule } from '../notification/notification.module';
 import { ContactupController } from './contactup.controller';
+import { ContactupService } from './contactup.service';
 
 @Module({
+  imports: [NotificationModule],
   controllers: [ContactupController],
   providers: [ContactupService],
 })

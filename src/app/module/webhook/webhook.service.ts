@@ -2,16 +2,21 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import Stripe from 'stripe';
 import { PrismaService } from '../../../prisma/prisma.service';
 import config from '../../config';
 import { stripeCents } from '../../helper/usd';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class WebhookService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notificationService?: NotificationService,
+  ) {}
 
   private getStripe() {
     if (!config.stripe.secretKey) {
@@ -175,6 +180,20 @@ export class WebhookService {
         },
       });
     });
+
+    try {
+      if (this.notificationService) {
+        await this.notificationService.createNotification({
+          userId: payment.userId,
+          title: 'Wallet Funded',
+          message: `$${Number(payment.amount).toFixed(2)} was successfully added to your wallet.`,
+          type: 'WALLET_TRANSACTION',
+          link: '/dashboard/wallet',
+        });
+      }
+    } catch (err: any) {
+      console.error('Failed to notify user on wallet top-up:', err?.message || err);
+    }
   }
 
   // ৪. Subscription payment যাচাই ও সক্রিয়করণ।
@@ -369,5 +388,26 @@ export class WebhookService {
         },
       });
     });
+
+    try {
+      if (this.notificationService) {
+        await this.notificationService.createNotification({
+          userId: order.userId,
+          title: 'Order Confirmed',
+          message: `Your order #${order.orderNumber} for ${order.orderItems.length} lead(s) was confirmed. Total: $${Number(order.totalAmount).toFixed(2)}.`,
+          type: 'ORDER',
+          link: '/dashboard/my-leads',
+        });
+
+        await this.notificationService.notifyAdmins({
+          title: 'New Order Received (Card)',
+          message: `Order #${order.orderNumber} ($${Number(order.totalAmount).toFixed(2)}) paid successfully via Stripe card.`,
+          type: 'ORDER',
+          link: '/admin/orders',
+        });
+      }
+    } catch (err: any) {
+      console.error('Failed to notify order completion via stripe:', err?.message || err);
+    }
   }
 }

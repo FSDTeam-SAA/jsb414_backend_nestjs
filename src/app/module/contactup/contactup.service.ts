@@ -1,16 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import buildWhereConditions from 'src/app/helper/buildWhereConditions';
 import paginationHelper, { IOptions } from 'src/app/helper/pagenation';
 import { IFilterParams } from 'src/app/helper/pick';
 import sendMailer from 'src/app/helper/sendMailer';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 import { AdminReplyContactupDto } from './dto/admin-reply-contactup.dto';
 import { CreateContactupDto } from './dto/create-contactup.dto';
 import { UpdateContactupDto } from './dto/update-contactup.dto';
 
 @Injectable()
 export class ContactupService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notificationService?: NotificationService,
+  ) {}
 
   async createContactUs(userId: string, dto: CreateContactupDto) {
     const user = await this.prisma.user.findUnique({
@@ -31,6 +35,19 @@ export class ContactupService {
         userId: user.id,
       },
     });
+
+    try {
+      if (this.notificationService) {
+        await this.notificationService.notifyAdmins({
+          title: 'New Support Inquiry',
+          message: `${result.name} submitted an inquiry: "${result.subject}".`,
+          type: 'SUPPORT_REPLY',
+          link: '/admin/support',
+        });
+      }
+    } catch (err: any) {
+      console.error('Failed to notify admins of support inquiry:', err?.message || err);
+    }
 
     return result;
   }
@@ -232,6 +249,22 @@ export class ContactupService {
         await sendMailer(contact.email, emailSubject, emailHtml);
       } catch (err: any) {
         console.error('Failed to send admin reply email:', err?.message || err);
+      }
+    }
+
+    if (contact.userId) {
+      try {
+        if (this.notificationService) {
+          await this.notificationService.createNotification({
+            userId: contact.userId,
+            title: 'Support Inquiry Reply',
+            message: `Admin replied to your inquiry: "${contact.subject}".`,
+            type: 'SUPPORT_REPLY',
+            link: '/dashboard/support',
+          });
+        }
+      } catch (err: any) {
+        console.error('Failed to notify user of support reply:', err?.message || err);
       }
     }
 

@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -16,6 +17,7 @@ import {
   calculateDynamicLeadPrice,
   inventoryAge,
 } from '../../helper/pricing.helper';
+import { NotificationService } from '../notification/notification.service';
 import { PromoCodeService } from '../promo-code/promo-code.service';
 import {
   ReviewBadLeadRequestDto,
@@ -28,6 +30,7 @@ export class OrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly promoCodeService: PromoCodeService,
+    @Optional() private readonly notificationService?: NotificationService,
   ) {}
 
   private getStripe() {
@@ -321,6 +324,28 @@ export class OrderService {
 
         return newOrder;
       });
+
+      // নোটিফিকেশন ট্রিগার: কাস্টমার ও অ্যাডমিন
+      try {
+        if (this.notificationService) {
+          await this.notificationService.createNotification({
+            userId,
+            title: 'Order Confirmed',
+            message: `Your order #${order.orderNumber} for ${preparedItems.length} lead(s) was placed successfully. Total: $${totalAmount.toFixed(2)}.`,
+            type: 'ORDER',
+            link: '/dashboard/my-leads',
+          });
+
+          await this.notificationService.notifyAdmins({
+            title: 'New Order Received',
+            message: `A customer placed order #${order.orderNumber} ($${totalAmount.toFixed(2)}) for ${preparedItems.length} lead(s).`,
+            type: 'ORDER',
+            link: '/admin/orders',
+          });
+        }
+      } catch (err: any) {
+        console.error('Failed to trigger order notification:', err?.message || err);
+      }
 
       return {
         message: 'Order completed successfully using wallet balance',
@@ -967,6 +992,19 @@ export class OrderService {
       },
     });
 
+    try {
+      if (this.notificationService) {
+        await this.notificationService.notifyAdmins({
+          title: 'New Bad Lead Claim',
+          message: `A customer submitted a bad lead claim for Lead #${request.lead?.leadNumber || dto.leadId} (${dto.reason}).`,
+          type: 'BAD_LEAD_REQUEST',
+          link: '/admin/bad-leads',
+        });
+      }
+    } catch (err: any) {
+      console.error('Failed to notify admins of bad lead request:', err?.message || err);
+    }
+
     return {
       message:
         'Bad lead credit request submitted successfully. Our team will review within 24-48 hours.',
@@ -1104,6 +1142,26 @@ export class OrderService {
 
       return updated;
     });
+
+    try {
+      if (this.notificationService) {
+        await this.notificationService.createNotification({
+          userId: request.userId,
+          title:
+            dto.status === 'APPROVED'
+              ? 'Bad Lead Claim Approved'
+              : 'Bad Lead Claim Rejected',
+          message:
+            dto.status === 'APPROVED'
+              ? `Your bad lead claim for Lead #${request.lead.leadNumber} was approved. $${creditReturned.toFixed(2)} credited to your wallet.`
+              : `Your bad lead claim for Lead #${request.lead.leadNumber} was rejected.${dto.adminNotes ? ` Note: ${dto.adminNotes}` : ''}`,
+          type: 'BAD_LEAD_REQUEST',
+          link: '/dashboard/my-leads',
+        });
+      }
+    } catch (err: any) {
+      console.error('Failed to notify customer of bad lead review:', err?.message || err);
+    }
 
     return {
       message:

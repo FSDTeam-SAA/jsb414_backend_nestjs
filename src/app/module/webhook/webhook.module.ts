@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
-import { WebhookService } from './webhook.service';
+import { NotificationModule } from '../notification/notification.module';
 import { WebhookController } from './webhook.controller';
+import { WebhookService } from './webhook.service';
 
 @Module({
+  imports: [NotificationModule],
   controllers: [WebhookController],
   providers: [WebhookService],
 })

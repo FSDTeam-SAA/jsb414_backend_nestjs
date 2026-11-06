@@ -753,8 +753,16 @@ export class OrderService {
 
   // ৫. একক অর্ডারের ইনভয়েস ভিউ
   async getOrderById(id: string, userId: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { id },
+    const isUuid =
+      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+        id,
+      );
+    const where = isUuid
+      ? { OR: [{ id }, { orderNumber: id }] }
+      : { orderNumber: id };
+
+    const order = await this.prisma.order.findFirst({
+      where,
       include: {
         orderItems: {
           include: {
@@ -826,9 +834,22 @@ export class OrderService {
         discount: Number(oi.discount),
         pricePaid: Number(oi.pricePaid),
         propertyAddress: oi.lead?.propertyAddress,
+        unitNumber: oi.lead?.unitNumber,
         city: oi.lead?.city,
         state: oi.lead?.state,
         zipcode: oi.lead?.zipcode,
+        propertyType: oi.lead?.propertyType,
+        propertyImage: oi.lead?.propertyImage,
+        firstName: oi.lead?.firstName,
+        lastName: oi.lead?.lastName,
+        ownerName: [oi.lead?.firstName, oi.lead?.lastName]
+          .filter(Boolean)
+          .join(' '),
+        phoneNumbers: oi.lead?.phoneNumbers || [],
+        emailAddresses: oi.lead?.emailAddresses || [],
+        estValue: oi.lead?.estValue,
+        estEquity: oi.lead?.estEquity,
+        saleDate: oi.lead?.saleDate,
       })),
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
@@ -847,6 +868,50 @@ export class OrderService {
     if (params.status) {
       andConditions.push({ status: params.status });
     }
+    if (params.startDate) {
+      andConditions.push({ createdAt: { gte: new Date(params.startDate) } });
+    }
+    if (params.endDate) {
+      const end = new Date(params.endDate);
+      end.setHours(23, 59, 59, 999);
+      andConditions.push({ createdAt: { lte: end } });
+    }
+    if (params.leadType) {
+      andConditions.push({
+        orderItems: {
+          some: {
+            lead: {
+              category: {
+                name: { contains: params.leadType, mode: 'insensitive' },
+              },
+            },
+          },
+        },
+      });
+    }
+    if (params.propertyType) {
+      andConditions.push({
+        orderItems: {
+          some: {
+            lead: {
+              propertyType: {
+                contains: params.propertyType,
+                mode: 'insensitive',
+              },
+            },
+          },
+        },
+      });
+    }
+    if (params.availability) {
+      andConditions.push({
+        orderItems: {
+          some: {
+            priceType: params.availability,
+          },
+        },
+      });
+    }
     if (params.searchTerm) {
       andConditions.push({
         OR: [
@@ -864,6 +929,45 @@ export class OrderService {
           {
             user: {
               lastName: { contains: params.searchTerm, mode: 'insensitive' },
+            },
+          },
+          {
+            orderItems: {
+              some: {
+                lead: {
+                  propertyAddress: {
+                    contains: params.searchTerm,
+                    mode: 'insensitive',
+                  },
+                },
+              },
+            },
+          },
+          {
+            orderItems: {
+              some: {
+                lead: {
+                  city: { contains: params.searchTerm, mode: 'insensitive' },
+                },
+              },
+            },
+          },
+          {
+            orderItems: {
+              some: {
+                lead: {
+                  state: { contains: params.searchTerm, mode: 'insensitive' },
+                },
+              },
+            },
+          },
+          {
+            orderItems: {
+              some: {
+                lead: {
+                  zipcode: { contains: params.searchTerm, mode: 'insensitive' },
+                },
+              },
             },
           },
         ],
@@ -894,7 +998,19 @@ export class OrderService {
               code: true,
             },
           },
-          orderItems: true,
+          orderItems: {
+            include: {
+              lead: {
+                select: {
+                  propertyType: true,
+                  city: true,
+                  state: true,
+                  zipcode: true,
+                  category: { select: { id: true, name: true } },
+                },
+              },
+            },
+          },
         },
       }),
       this.prisma.order.count({ where }),
@@ -907,21 +1023,27 @@ export class OrderService {
         total,
         totalPage: Math.ceil(total / limit),
       },
-      data: orders.map((o) => ({
-        id: o.id,
-        orderNumber: o.orderNumber,
-        user: o.user,
-        subtotal: Number(o.subtotal),
-        discount: Number(o.discount),
-        promoDiscount: Number(o.promoDiscount || 0),
-        promoCode: o.promoCode?.code || null,
-        totalAmount: Number(o.totalAmount),
-        walletUsed: Number(o.walletUsed),
-        cardPaid: Number(o.cardPaid),
-        status: o.status,
-        itemsCount: o.orderItems.length,
-        createdAt: o.createdAt,
-      })),
+      data: orders.map((o) => {
+        const firstItem = o.orderItems[0];
+        return {
+          id: o.id,
+          orderNumber: o.orderNumber,
+          user: o.user,
+          subtotal: Number(o.subtotal),
+          discount: Number(o.discount),
+          promoDiscount: Number(o.promoDiscount || 0),
+          promoCode: o.promoCode?.code || null,
+          totalAmount: Number(o.totalAmount),
+          walletUsed: Number(o.walletUsed),
+          cardPaid: Number(o.cardPaid),
+          status: o.status,
+          itemsCount: o.orderItems.length,
+          leadType: firstItem?.lead?.category?.name || 'Foreclosure',
+          propertyType: firstItem?.lead?.propertyType || 'Single Family',
+          availability: firstItem?.priceType || 'SHARED',
+          createdAt: o.createdAt,
+        };
+      }),
     };
   }
 

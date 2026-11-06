@@ -12,7 +12,7 @@ import {
 
 export class MyOrdersQueryDto {
   @ApiPropertyOptional({
-    description: 'Search by order number (e.g. FG-ORD-...)',
+    description: 'Search by order number, customer name, email, city, state, or zip',
     example: 'FG-ORD',
   })
   @IsOptional()
@@ -28,6 +28,42 @@ export class MyOrdersQueryDto {
   @IsOptional()
   @IsIn(['PENDING', 'COMPLETED', 'FAILED'])
   status?: 'PENDING' | 'COMPLETED' | 'FAILED';
+
+  @ApiPropertyOptional({
+    description: 'Filter orders created on or after this date (ISO string or YYYY-MM-DD)',
+  })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter orders created on or before this date (ISO string or YYYY-MM-DD)',
+  })
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by lead category / type (e.g. Foreclosure, Tax Lien, etc.)',
+  })
+  @IsOptional()
+  @IsString()
+  leadType?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by property type (e.g. Single Family, Condo, etc.)',
+  })
+  @IsOptional()
+  @IsString()
+  propertyType?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by availability / price type',
+    enum: ['SHARED', 'EXCLUSIVE'],
+  })
+  @IsOptional()
+  @IsIn(['SHARED', 'EXCLUSIVE'])
+  availability?: 'SHARED' | 'EXCLUSIVE';
 
   @ApiPropertyOptional({ description: 'Page number', default: 1 })
   @IsOptional()

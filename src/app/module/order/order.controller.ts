@@ -113,7 +113,15 @@ export class OrderController {
   })
   @HttpCode(HttpStatus.OK)
   async getAllOrdersAdmin(@Query() query: MyOrdersQueryDto) {
-    const filters = pick(query, ['searchTerm', 'status']);
+    const filters = pick(query, [
+      'searchTerm',
+      'status',
+      'startDate',
+      'endDate',
+      'leadType',
+      'propertyType',
+      'availability',
+    ]);
     const options = pick(query, ['page', 'limit', 'sortBy', 'sortOrder']);
     const result = await this.orderService.getAllOrdersAdmin(filters, options);
 
@@ -184,11 +192,11 @@ export class OrderController {
   @Get(':id')
   @UseGuards(AuthGuard())
   @ApiOperation({
-    summary: 'Get single order details and invoice by order ID',
+    summary: 'Get single order details and invoice by order ID or order number',
   })
   @HttpCode(HttpStatus.OK)
   async getOrderById(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id') id: string,
     @Req() req: Request,
   ) {
     const userId = req.user!.id;

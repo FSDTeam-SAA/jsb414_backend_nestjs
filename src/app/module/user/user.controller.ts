@@ -102,7 +102,9 @@ export class UserController {
   @UseGuards(AuthGuard())
   @ApiBearerAuth('access-token')
   @ApiOperation({
-    summary: 'get current user profile',
+    summary: 'get current user profile with active subscription (or null if none)',
+    description:
+      'Returns current authenticated user profile, walletBalance, and activeSubscribe details (null if user has no active subscription).',
   })
   @HttpCode(HttpStatus.OK)
   async getProfile(@Req() req: Request) {

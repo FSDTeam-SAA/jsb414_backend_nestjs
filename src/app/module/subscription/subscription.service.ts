@@ -3,8 +3,10 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { NotificationService } from '../notification/notification.service';
 import Stripe from 'stripe';
 import { PrismaService } from '../../../prisma/prisma.service';
 import config from '../../config';
@@ -17,7 +19,10 @@ import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 
 @Injectable()
 export class SubscriptionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notificationService?: NotificationService,
+  ) {}
 
   private getStripe() {
     if (!config.stripe.secretKey) {
@@ -476,5 +481,272 @@ export class SubscriptionService {
       goldPlanRevenue: goldPlanReveniy,
       diamondPlanRevenue: diamonPlanReveniy,
     };
+  }
+
+  // =========================================================================
+  // কাস্টমার প্রোফাইল / মেম্বারশিপ স্ক্রিনের মেথডসমূহ (Figma User Profile Membership)
+  // =========================================================================
+
+  // ১. ইউজারের বর্তমান মেম্বারশিপ কার্ড ডাটা (Current Membership)
+  async getMyMembership(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const now = new Date();
+    const activeSub = await this.prisma.userSubscribe.findFirst({
+      where: {
+        userId,
+        status: { in: ['ACTIVE', 'CANCELLED'] },
+        startDate: { lte: now },
+        endDate: { gt: now },
+      },
+      orderBy: { endDate: 'desc' },
+      include: {
+        subscribe: true,
+      },
+    });
+
+    if (!activeSub || !activeSub.subscribe) {
+      return {
+        planName: 'Free Plan',
+        planTitle: 'Free',
+        planId: null,
+        subTitle: 'Get started and explore the marketplace',
+        discountPercentage: 0,
+        price: 0,
+        currency: 'USD',
+        status: 'Active',
+        startDate: null,
+        endDate: null,
+        nextBillingDate: null,
+        canCancel: false,
+        isCancelled: false,
+        isFree: true,
+        notice:
+          'You are currently on the Free plan. Upgrade anytime to get discounts on all leads.',
+      };
+    }
+
+    const isCancelled = activeSub.status === 'CANCELLED';
+    const isPaid = Number(activeSub.subscribe.price) > 0;
+
+    return {
+      planName: `${activeSub.subscribe.title} Member`,
+      planTitle: activeSub.subscribe.title,
+      planId: activeSub.subscribe.id,
+      subTitle: activeSub.subscribe.subTitle,
+      discountPercentage: Number(activeSub.subscribe.discount || 0),
+      price: Number(activeSub.subscribe.price),
+      currency: activeSub.subscribe.currency || 'USD',
+      status: isCancelled ? 'Cancelled' : 'Active',
+      startDate: activeSub.startDate,
+      endDate: activeSub.endDate,
+      nextBillingDate: activeSub.endDate,
+      canCancel: isPaid && !isCancelled,
+      isCancelled,
+      isFree: !isPaid,
+      notice: isCancelled
+        ? 'Your membership has been cancelled. Your paid benefits remain active until the end of your billing period. After that, your account switches to Free.'
+        : 'Your paid membership remains active until the end of your billing period. After that, your account switches to Free.',
+    };
+  }
+
+  // ২. মেম্বারশিপ বাতিল করা (Cancel Membership)
+  async cancelMembership(userId: string) {
+    const now = new Date();
+    const activeSub = await this.prisma.userSubscribe.findFirst({
+      where: {
+        userId,
+        status: 'ACTIVE',
+        startDate: { lte: now },
+        endDate: { gt: now },
+      },
+      orderBy: { endDate: 'desc' },
+      include: {
+        subscribe: true,
+      },
+    });
+
+    if (!activeSub) {
+      throw new BadRequestException(
+        'No active paid membership found to cancel',
+      );
+    }
+
+    if (Number(activeSub.subscribe?.price || 0) === 0) {
+      throw new BadRequestException('Free plan cannot be cancelled');
+    }
+
+    // Stripe-এ সাবস্ক্রিপশন থাকলে পিরিয়ড শেষ হওয়া পর্যন্ত অটো-রিনিউয়াল বন্ধ করা
+    if (activeSub.stripeSubscriptionId) {
+      try {
+        const stripe = this.getStripe();
+        await stripe.subscriptions.update(activeSub.stripeSubscriptionId, {
+          cancel_at_period_end: true,
+        });
+      } catch (err: any) {
+        console.error('Failed to cancel Stripe subscription renewal:', err?.message || err);
+      }
+    }
+
+    // DB-তে স্ট্যাটাস CANCELLED করে রাখা (পিরিয়ড শেষ হওয়া পর্যন্ত ডিসকাউন্ট চালু থাকবে)
+    const updated = await this.prisma.userSubscribe.update({
+      where: { id: activeSub.id },
+      data: {
+        status: 'CANCELLED',
+        cancelledAt: now,
+      },
+      include: {
+        subscribe: true,
+      },
+    });
+
+    // ইন-অ্যাপ নোটিফিকেশন পাঠানো
+    try {
+      if (this.notificationService) {
+        await this.notificationService.createNotification({
+          userId,
+          title: 'Membership Cancelled',
+          message: `Your ${updated.subscribe.title} membership has been cancelled. Your benefits remain active until ${updated.endDate.toLocaleDateString()}. After that, your account switches to Free.`,
+          type: 'SYSTEM',
+          link: '/dashboard/membership',
+        });
+      }
+    } catch (e: any) {
+      console.error('Failed to send cancellation notification:', e?.message || e);
+    }
+
+    return {
+      message: `Membership cancelled successfully. Your paid benefits remain active until ${updated.endDate.toLocaleDateString()}. After that, your account switches to Free.`,
+      data: {
+        status: 'Cancelled',
+        endDate: updated.endDate,
+        cancelledAt: updated.cancelledAt,
+        planName: updated.subscribe.title,
+      },
+    };
+  }
+
+  // ৩. ইউজারের সাবস্ক্রিপশন ইনভয়েস হিস্ট্রি (Invoice History)
+  async getMyInvoices(userId: string, options: IOptions) {
+    const { page, limit, skip, sortBy, sortOrder } = paginationHelper(options);
+
+    const where: any = {
+      userId,
+      paymentType: 'SUBSCRIPTION',
+    };
+
+    const [payments, total] = await Promise.all([
+      this.prisma.payment.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: {
+          [sortBy || 'createdAt']: sortOrder || 'desc',
+        },
+        include: {
+          subscribe: {
+            select: {
+              id: true,
+              title: true,
+              subTitle: true,
+              price: true,
+              discount: true,
+            },
+          },
+        },
+      }),
+      this.prisma.payment.count({ where }),
+    ]);
+
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+
+    const formatted = payments.map((p) => {
+      const pDate = new Date(p.createdAt);
+      const displayDate = `${monthNames[pDate.getMonth()]} ${pDate.getFullYear()}`;
+
+      let displayStatus = 'Paid';
+      if (p.status === 'PENDING') displayStatus = 'Pending';
+      else if (p.status === 'FAILED') displayStatus = 'Failed';
+      else if (p.status === 'REFUNDED') displayStatus = 'Refunded';
+
+      return {
+        id: p.id,
+        planName: p.subscribe?.title || 'Subscription',
+        subTitle: p.subscribe?.subTitle || '',
+        date: displayDate,
+        fullDate: p.createdAt,
+        amount: Number(p.amount),
+        currency: p.currency,
+        status: displayStatus,
+        receiptUrl: p.receiptUrl || null,
+        stripePaymentIntentId: p.stripePaymentIntentId || null,
+      };
+    });
+
+    return {
+      meta: {
+        page,
+        limit,
+        total,
+        totalPage: Math.ceil(total / limit) || 1,
+      },
+      data: formatted,
+    };
+  }
+
+  // ৪. প্ল্যান তুলনা ও বর্তমান ইউজারের অ্যাক্টিভ প্ল্যান মার্ক করা (Compare Plans)
+  async comparePlans(userId?: string) {
+    const plans = await this.prisma.subscribe.findMany({
+      where: { isActive: true },
+      orderBy: { price: 'asc' },
+    });
+
+    let currentPlanId: string | null = null;
+
+    if (userId) {
+      const now = new Date();
+      const activeSub = await this.prisma.userSubscribe.findFirst({
+        where: {
+          userId,
+          status: { in: ['ACTIVE', 'CANCELLED'] },
+          startDate: { lte: now },
+          endDate: { gt: now },
+        },
+        orderBy: { endDate: 'desc' },
+        select: { subscribeId: true },
+      });
+      currentPlanId = activeSub?.subscribeId || null;
+    }
+
+    return plans.map((plan) => {
+      const isCurrent = plan.id === currentPlanId;
+      const isFree = Number(plan.price) === 0;
+
+      let buttonText = 'Chose Plan';
+      if (isCurrent) {
+        buttonText = 'Current Plan';
+      } else if (isFree) {
+        buttonText = 'Free Plan';
+      }
+
+      return {
+        id: plan.id,
+        title: plan.title,
+        subTitle: plan.subTitle,
+        price: Number(plan.price),
+        discount: Number(plan.discount),
+        currency: plan.currency || 'USD',
+        billingPeriod: 'month',
+        isCurrentPlan: isCurrent,
+        buttonText,
+      };
+    });
   }
 }

@@ -23,6 +23,7 @@ import type { Request } from 'express';
 import pick from '../../helper/pick';
 import { AuthGuard } from '../../middlewares/auth.guard';
 import { PermissionsGuard } from '../../middlewares/permissions.guard';
+import { MyInvoicesQueryDto } from './dto/my-invoices-query.dto';
 import { CreateSubscriptionPaymentDto } from './dto/create-subscription-payment.dto';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { SubscriptionQueryDto } from './dto/subscription-query.dto';
@@ -159,6 +160,78 @@ export class SubscriptionController {
     );
     return {
       message: result.message,
+      data: result,
+    };
+  }
+
+    // =========================================================================
+  // কাস্টমার প্রোফাইল / মেম্বারশিপ স্ক্রিনের এন্ডপয়েন্টস (Figma User Profile Membership)
+  // =========================================================================
+
+  @Get('my-membership')
+  @UseGuards(AuthGuard())
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary:
+      'Get customer current membership card details (Plan, Status, Next Billing Date, Cancel Notice)',
+  })
+  @HttpCode(HttpStatus.OK)
+  async getMyMembership(@Req() req: Request) {
+    const userId = req.user!.id;
+    const result = await this.subscriptionService.getMyMembership(userId);
+    return {
+      message: 'Current membership details fetched successfully',
+      data: result,
+    };
+  }
+
+  @Post('cancel-membership')
+  @UseGuards(AuthGuard())
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary:
+      'Cancel active paid membership auto-renewal (Benefits remain active until billing period ends)',
+  })
+  @HttpCode(HttpStatus.OK)
+  async cancelMembership(@Req() req: Request) {
+    const userId = req.user!.id;
+    const result = await this.subscriptionService.cancelMembership(userId);
+    return result;
+  }
+
+  @Get('my-invoices')
+  @UseGuards(AuthGuard())
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary:
+      'Get customer subscription invoice history (Plan Name, Date, Amount, Status: Paid, Download Invoice)',
+  })
+  @HttpCode(HttpStatus.OK)
+  async getMyInvoices(
+    @Req() req: Request,
+    @Query() query: MyInvoicesQueryDto,
+  ) {
+    const userId = req.user!.id;
+    const options = pick(query, ['page', 'limit', 'sortBy', 'sortOrder']);
+    const result = await this.subscriptionService.getMyInvoices(userId, options);
+    return {
+      message: 'Subscription invoices fetched successfully',
+      meta: result.meta,
+      data: result.data,
+    };
+  }
+
+  @Get('compare-plans')
+  @ApiOperation({
+    summary:
+      'Compare all membership plans with current user plan highlighted (Free, Silver, Gold, Diamond)',
+  })
+  @HttpCode(HttpStatus.OK)
+  async comparePlans(@Req() req: Request) {
+    const userId = req.user?.id;
+    const result = await this.subscriptionService.comparePlans(userId);
+    return {
+      message: 'Membership plans fetched successfully',
       data: result,
     };
   }

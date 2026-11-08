@@ -30,8 +30,12 @@ describe('Subscription Service - Checkout URL & Free Activation', () => {
     (Stripe as unknown as jest.Mock).mockImplementation(() => stripeMock);
 
     db = {
+      user: {
+        findUnique: jest.fn(),
+      },
       subscribe: {
         findUnique: jest.fn(),
+        findMany: jest.fn(),
       },
       userSubscribe: {
         findFirst: jest.fn().mockResolvedValue(null),
@@ -272,6 +276,130 @@ describe('Subscription Service - Checkout URL & Free Activation', () => {
       expect(overview.silverPlanRevenue).toBe(0);
       expect(overview.goldPlanRevenue).toBe(0);
       expect(overview.diamondPlanRevenue).toBe(0);
+    });
+  });
+
+  describe('getMyMembership', () => {
+    it('returns Gold Member details with next billing date and cancel notice', async () => {
+      db.user.findUnique.mockResolvedValueOnce({ id: userId, email: 'gold@example.com' });
+      db.userSubscribe.findFirst.mockResolvedValueOnce({
+        id: 'us_1',
+        status: 'ACTIVE',
+        startDate: new Date('2026-10-01'),
+        endDate: new Date('2026-10-31'),
+        subscribe: {
+          id: 'plan_gold',
+          title: 'Gold',
+          subTitle: 'Premium Plan',
+          price: 99,
+          discount: 10,
+          currency: 'USD',
+        },
+      });
+
+      const result = await service.getMyMembership(userId);
+      expect(result.planName).toBe('Gold Member');
+      expect(result.discountPercentage).toBe(10);
+      expect(result.status).toBe('Active');
+      expect(result.canCancel).toBe(true);
+      expect(result.isFree).toBe(false);
+      expect(result.notice).toContain('remains active until the end of your billing period');
+    });
+
+    it('defaults to Free plan when user has no active subscription', async () => {
+      db.user.findUnique.mockResolvedValueOnce({ id: userId, email: 'free@example.com' });
+      db.userSubscribe.findFirst.mockResolvedValueOnce(null);
+
+      const result = await service.getMyMembership(userId);
+      expect(result.planName).toBe('Free Plan');
+      expect(result.discountPercentage).toBe(0);
+      expect(result.canCancel).toBe(false);
+      expect(result.isFree).toBe(true);
+    });
+  });
+
+  describe('cancelMembership', () => {
+    it('cancels active paid membership and preserves benefits until end date', async () => {
+      db.userSubscribe.findFirst.mockResolvedValueOnce({
+        id: 'us_gold',
+        status: 'ACTIVE',
+        endDate: new Date('2026-10-31'),
+        subscribe: { id: 'plan_gold', title: 'Gold', price: 99 },
+      });
+      db.userSubscribe.update.mockResolvedValueOnce({
+        id: 'us_gold',
+        status: 'CANCELLED',
+        cancelledAt: new Date(),
+        endDate: new Date('2026-10-31'),
+        subscribe: { id: 'plan_gold', title: 'Gold' },
+      });
+
+      const result = await service.cancelMembership(userId);
+      expect(result.message).toContain('cancelled successfully');
+      expect(result.data.status).toBe('Cancelled');
+      expect(db.userSubscribe.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'CANCELLED' }),
+        }),
+      );
+    });
+
+    it('rejects cancellation if user is on Free plan', async () => {
+      db.userSubscribe.findFirst.mockResolvedValueOnce({
+        id: 'us_free',
+        status: 'ACTIVE',
+        subscribe: { id: 'plan_free', title: 'Free', price: 0 },
+      });
+
+      await expect(service.cancelMembership(userId)).rejects.toThrow();
+    });
+  });
+
+  describe('getMyInvoices', () => {
+    it('returns formatted subscription invoice history', async () => {
+      db.payment.findMany.mockResolvedValueOnce([
+        {
+          id: 'pay_1',
+          amount: 49.0,
+          currency: 'USD',
+          status: 'COMPLETED',
+          receiptUrl: 'https://pay.stripe.com/receipt/1',
+          createdAt: new Date('2026-07-15'),
+          subscribe: { id: 'plan_silver', title: 'Silver', subTitle: 'Silver Plan' },
+        },
+      ]);
+      db.payment.count.mockResolvedValueOnce(1);
+
+      const result = await service.getMyInvoices(userId, { page: 1, limit: 10 });
+      expect(result.meta.total).toBe(1);
+      expect(result.data[0].planName).toBe('Silver');
+      expect(result.data[0].status).toBe('Paid');
+      expect(result.data[0].amount).toBe(49.0);
+      expect(result.data[0].date).toBe('July 2026');
+      expect(result.data[0].receiptUrl).toBe('https://pay.stripe.com/receipt/1');
+    });
+  });
+
+  describe('comparePlans', () => {
+    it('returns all active plans and marks current plan', async () => {
+      db.subscribe.findMany.mockResolvedValueOnce([
+        { id: 'p_free', title: 'Free', subTitle: 'Explore', price: 0, discount: 0, currency: 'USD' },
+        { id: 'p_silver', title: 'Silver', subTitle: 'Save more', price: 49, discount: 5, currency: 'USD' },
+        { id: 'p_gold', title: 'Gold', subTitle: 'Higher discount', price: 99, discount: 10, currency: 'USD' },
+        { id: 'p_diamond', title: 'Diamond', subTitle: 'Highest discount', price: 149, discount: 15, currency: 'USD' },
+      ]);
+      db.userSubscribe.findFirst.mockResolvedValueOnce({
+        subscribeId: 'p_gold',
+      });
+
+      const result = await service.comparePlans(userId);
+      expect(result.length).toBe(4);
+      const gold = result.find((p) => p.id === 'p_gold');
+      expect(gold.isCurrentPlan).toBe(true);
+      expect(gold.buttonText).toBe('Current Plan');
+      const silver = result.find((p) => p.id === 'p_silver');
+      expect(silver.isCurrentPlan).toBe(false);
+      expect(silver.buttonText).toBe('Chose Plan');
     });
   });
 });

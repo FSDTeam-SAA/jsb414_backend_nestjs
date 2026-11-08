@@ -244,6 +244,95 @@ describe('UserService - Admin Role & Permissions', () => {
       expect(result.leadsActivity.badLeadRequests[0].reason).toBe('INVALID_PHONE');
     });
   });
+
+  describe('getSingleUser', () => {
+    it('returns user profile with activeSubscribe populated when user has an active subscription', async () => {
+      const now = new Date();
+      const future = new Date(Date.now() + 15 * 86400000);
+
+      db.user.findUnique.mockResolvedValueOnce({
+        id: 'u_100',
+        firstName: 'Rahim',
+        lastName: 'Uddin',
+        email: 'rahim@example.com',
+        phoneNumber: '+8801700000000',
+        photo: 'https://example.com/avatar.jpg',
+        role: 'user',
+        verifiedEmail: true,
+        walletBalance: 250,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      db.userSubscribe.findFirst.mockResolvedValueOnce({
+        id: 'us_1',
+        userId: 'u_100',
+        status: 'ACTIVE',
+        startDate: now,
+        endDate: future,
+        subscribe: {
+          id: 'sub_gold',
+          title: 'Gold',
+          subTitle: '10% Lead Discount',
+          price: 99,
+          discount: 10,
+          currency: 'USD',
+        },
+      });
+
+      const result = await service.getSingleUser('u_100');
+
+      expect(result.id).toBe('u_100');
+      expect(result.walletBalance).toBe(250);
+      expect(result.activeSubscribe).not.toBeNull();
+      expect(result.activeSubscribe).toEqual({
+        id: 'us_1',
+        subscribeId: 'sub_gold',
+        title: 'Gold',
+        planName: 'Gold Member',
+        subTitle: '10% Lead Discount',
+        price: 99,
+        discount: 10,
+        currency: 'USD',
+        status: 'ACTIVE',
+        startDate: now,
+        endDate: future,
+      });
+      expect(result.activeSubscription).toEqual(result.activeSubscribe);
+    });
+
+    it('returns user profile with activeSubscribe: null when user has no active subscription', async () => {
+      const now = new Date();
+
+      db.user.findUnique.mockResolvedValueOnce({
+        id: 'u_200',
+        firstName: 'Karim',
+        lastName: 'Ahmed',
+        email: 'karim@example.com',
+        walletBalance: 0,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      db.userSubscribe.findFirst.mockResolvedValueOnce(null);
+
+      const result = await service.getSingleUser('u_200');
+
+      expect(result.id).toBe('u_200');
+      expect(result.walletBalance).toBe(0);
+      expect(result.activeSubscribe).toBeNull();
+      expect(result.activeSubscription).toBeNull();
+    });
+
+    it('throws 404 HttpException if user does not exist', async () => {
+      db.user.findUnique.mockResolvedValueOnce(null);
+      db.userSubscribe.findFirst.mockResolvedValueOnce(null);
+
+      await expect(service.getSingleUser('u_missing')).rejects.toThrow(
+        HttpException,
+      );
+    });
+  });
 });
 
 describe('PermissionsGuard', () => {

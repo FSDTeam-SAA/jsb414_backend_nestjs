@@ -103,13 +103,66 @@ export class UserService {
   }
 
   async getSingleUser(userId: string) {
-    const data = await this.prisma.user.findUniqueOrThrow({
-      where: {
-        id: userId,
-      },
-      select: publicUserSelect,
-    });
-    return data;
+    const now = new Date();
+
+    const [user, activeSub] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          ...publicUserSelect,
+          walletBalance: true,
+        },
+      }),
+      this.prisma.userSubscribe.findFirst({
+        where: {
+          userId,
+          status: { in: ['ACTIVE', 'CANCELLED'] },
+          startDate: { lte: now },
+          endDate: { gt: now },
+        },
+        orderBy: { endDate: 'desc' },
+        include: {
+          subscribe: {
+            select: {
+              id: true,
+              title: true,
+              subTitle: true,
+              price: true,
+              discount: true,
+              currency: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    }
+
+    const activeSubscribe =
+      activeSub && activeSub.subscribe
+        ? {
+            id: activeSub.id,
+            subscribeId: activeSub.subscribe.id,
+            title: activeSub.subscribe.title,
+            planName: `${activeSub.subscribe.title} Member`,
+            subTitle: activeSub.subscribe.subTitle,
+            price: Number(activeSub.subscribe.price),
+            discount: Number(activeSub.subscribe.discount || 0),
+            currency: activeSub.subscribe.currency || 'USD',
+            status: activeSub.status,
+            startDate: activeSub.startDate,
+            endDate: activeSub.endDate,
+          }
+        : null;
+
+    return {
+      ...user,
+      walletBalance: Number(user.walletBalance || 0),
+      activeSubscribe,
+      activeSubscription: activeSubscribe,
+    };
   }
 
   async update(id: string, updateUserDto: UpdateUserDto) {

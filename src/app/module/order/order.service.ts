@@ -344,7 +344,10 @@ export class OrderService {
           });
         }
       } catch (err: any) {
-        console.error('Failed to trigger order notification:', err?.message || err);
+        console.error(
+          'Failed to trigger order notification:',
+          err?.message || err,
+        );
       }
 
       return {
@@ -1124,7 +1127,10 @@ export class OrderService {
         });
       }
     } catch (err: any) {
-      console.error('Failed to notify admins of bad lead request:', err?.message || err);
+      console.error(
+        'Failed to notify admins of bad lead request:',
+        err?.message || err,
+      );
     }
 
     return {
@@ -1282,7 +1288,10 @@ export class OrderService {
         });
       }
     } catch (err: any) {
-      console.error('Failed to notify customer of bad lead review:', err?.message || err);
+      console.error(
+        'Failed to notify customer of bad lead review:',
+        err?.message || err,
+      );
     }
 
     return {
@@ -1291,6 +1300,129 @@ export class OrderService {
           ? `Request approved. $${creditReturned.toFixed(2)} account credit returned to user wallet.`
           : 'Request rejected.',
       data: result,
+    };
+  }
+
+  // ১০. কাস্টমারের অর্ডার ওভারভিউ এবং সামারি কার্ডস (My Orders Summary)
+  async myOrder(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        walletBalance: true,
+      },
+    });
+    if (!user) throw new NotFoundException('User is not found');
+
+    const [
+      totalOrder,
+      totalPurchasedLeads,
+      completedOrdersAgg,
+      pendingOrdersCount,
+      failedOrdersCount,
+      recentOrders,
+    ] = await Promise.all([
+      // ১. ইউজারের মোট অর্ডার সংখ্যা
+      this.prisma.order.count({
+        where: { userId },
+      }),
+
+      // ২. ইউজারের মোট কেনা লিড সংখ্যা
+      this.prisma.userLead.count({
+        where: { userId },
+      }),
+
+      // ৩. সফল অর্ডারের আর্থিক বিবরণী (মোট খরচ, ওয়ালেট পেমেন্ট, কার্ড পেমেন্ট)
+      this.prisma.order.aggregate({
+        where: {
+          userId,
+          status: 'COMPLETED',
+        },
+        _sum: {
+          totalAmount: true,
+          walletUsed: true,
+          cardPaid: true,
+          promoDiscount: true,
+        },
+        _count: {
+          id: true,
+        },
+      }),
+
+      // ৪. পেন্ডিং অর্ডার সংখ্যা
+      this.prisma.order.count({
+        where: {
+          userId,
+          status: 'PENDING',
+        },
+      }),
+
+      // ৫. ফেইল্ড অর্ডার সংখ্যা
+      this.prisma.order.count({
+        where: {
+          userId,
+          status: 'FAILED',
+        },
+      }),
+
+      // ৬. সাম্প্রতিক ৫টি অর্ডার
+      this.prisma.order.findMany({
+        where: { userId },
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          orderNumber: true,
+          totalAmount: true,
+          walletUsed: true,
+          cardPaid: true,
+          status: true,
+          createdAt: true,
+          _count: { select: { orderItems: true } },
+        },
+      }),
+    ]);
+
+    const totalSpent = Number(completedOrdersAgg._sum?.totalAmount || 0);
+    const walletSpent = Number(completedOrdersAgg._sum?.walletUsed || 0);
+    const cardSpent = Number(completedOrdersAgg._sum?.cardPaid || 0);
+    const promoSavings = Number(completedOrdersAgg._sum?.promoDiscount || 0);
+
+    return {
+      summaryCards: {
+        totalOrder,
+        totalPurchasedLeads,
+        totalSpent,
+        walletBalance: Number(user.walletBalance || 0),
+      },
+      financialBreakdown: {
+        totalSpent,
+        walletSpent,
+        cardSpent,
+        promoSavings,
+        currency: 'USD',
+      },
+      orderStats: {
+        total: totalOrder,
+        completed: completedOrdersAgg._count?.id || 0,
+        pending: pendingOrdersCount,
+        failed: failedOrdersCount,
+      },
+      recentOrders: recentOrders.map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        totalAmount: Number(o.totalAmount),
+        walletUsed: Number(o.walletUsed),
+        cardPaid: Number(o.cardPaid),
+        status: o.status,
+        itemsCount: o._count?.orderItems || 0,
+        createdAt: o.createdAt,
+      })),
     };
   }
 }

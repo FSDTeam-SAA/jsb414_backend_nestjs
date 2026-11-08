@@ -84,7 +84,41 @@ export class OrderController {
     return this.orderService.exportMyLeadsCsv(userId, res);
   }
 
-  // ৪. লগইন করা কাস্টমারের অর্ডার হিস্ট্রি (My Orders)
+    // ৪.১ কাস্টমারের অর্ডার ওভারভিউ এবং সামারি কার্ডস (My Orders Summary)
+  @Get('my-orders/summary')
+  @UseGuards(AuthGuard())
+  @ApiOperation({
+    summary:
+      'Get customer order summary cards (Total Orders, Total Purchased Leads, Total Spent, & Wallet Balance)',
+  })
+  @HttpCode(HttpStatus.OK)
+  async getMyOrderSummary(@Req() req: Request) {
+    const userId = req.user!.id;
+    const result = await this.orderService.myOrder(userId);
+    return {
+      message: 'My order summary fetched successfully',
+      data: result,
+    };
+  }
+
+  // ৪.২ অ্যালিয়াস এন্ডপয়েন্ট: /order/my-order
+  @Get('my-order')
+  @UseGuards(AuthGuard())
+  @ApiOperation({
+    summary:
+      'Get customer order summary cards (Alias for /order/my-orders/summary)',
+  })
+  @HttpCode(HttpStatus.OK)
+  async myOrder(@Req() req: Request) {
+    const userId = req.user!.id;
+    const result = await this.orderService.myOrder(userId);
+    return {
+      message: 'My order summary fetched successfully',
+      data: result,
+    };
+  }
+
+  // ৪.৩ লগইন করা কাস্টমারের অর্ডার হিস্ট্রি (My Orders)
   @Get('my-orders')
   @UseGuards(AuthGuard())
   @ApiOperation({

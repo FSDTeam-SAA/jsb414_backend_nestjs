@@ -57,9 +57,11 @@ describe('OrderService', () => {
           ...data,
         })),
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn(),
         update: jest.fn(),
+        aggregate: jest.fn(),
       },
       orderItem: {
         createMany: jest.fn(),
@@ -405,9 +407,64 @@ describe('OrderService', () => {
     });
   });
 
+  describe('myOrder', () => {
+    it('returns customer order summary cards and financial breakdown', async () => {
+      db.user.findUnique.mockResolvedValueOnce({
+        id: userId,
+        firstName: 'John',
+        lastName: 'Doe',
+        email: 'john@example.com',
+        walletBalance: 250.0,
+      });
+      db.order.count
+        .mockResolvedValueOnce(5) // totalOrder
+        .mockResolvedValueOnce(1) // pending
+        .mockResolvedValueOnce(0); // failed
+      db.userLead.count.mockResolvedValueOnce(8); // totalPurchasedLeads
+      db.order.aggregate.mockResolvedValueOnce({
+        _count: { id: 4 },
+        _sum: {
+          totalAmount: 180.0,
+          walletUsed: 100.0,
+          cardPaid: 80.0,
+          promoDiscount: 20.0,
+        },
+      });
+      db.order.findMany.mockResolvedValueOnce([
+        {
+          id: 'ord_1',
+          orderNumber: 'FG-ORD-10001',
+          totalAmount: 45.0,
+          walletUsed: 25.0,
+          cardPaid: 20.0,
+          status: 'COMPLETED',
+          createdAt: new Date(),
+          _count: { orderItems: 2 },
+        },
+      ]);
+
+      const result = await service.myOrder(userId);
+      expect(result.summaryCards.totalOrder).toBe(5);
+      expect(result.summaryCards.totalPurchasedLeads).toBe(8);
+      expect(result.summaryCards.totalSpent).toBe(180.0);
+      expect(result.summaryCards.walletBalance).toBe(250.0);
+      expect(result.financialBreakdown.walletSpent).toBe(100.0);
+      expect(result.financialBreakdown.cardSpent).toBe(80.0);
+      expect(result.orderStats.completed).toBe(4);
+      expect(result.recentOrders.length).toBe(1);
+    });
+
+    it('throws NotFoundException if user is not found', async () => {
+      db.user.findUnique.mockResolvedValueOnce(null);
+      await expect(service.myOrder('missing-user')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('getOrderById', () => {
     it('returns single order details for owner', async () => {
-      db.order.findUnique.mockResolvedValueOnce({
+      db.order.findFirst.mockResolvedValueOnce({
         id: 'ord_1',
         orderNumber: 'FG-ORD-10001',
         userId,
@@ -428,7 +485,7 @@ describe('OrderService', () => {
     });
 
     it('throws ForbiddenException if another non-admin user attempts to view the order', async () => {
-      db.order.findUnique.mockResolvedValueOnce({
+      db.order.findFirst.mockResolvedValueOnce({
         id: 'ord_1',
         orderNumber: 'FG-ORD-10001',
         userId: 'other_user_id',

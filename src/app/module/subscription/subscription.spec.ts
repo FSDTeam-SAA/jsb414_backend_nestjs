@@ -58,6 +58,7 @@ describe('Subscription Service - Checkout URL & Free Activation', () => {
           id: 'pay_1',
           ...data,
         })),
+        findFirst: jest.fn(),
         findMany: jest.fn(),
         count: jest.fn(),
         aggregate: jest.fn(),
@@ -114,6 +115,36 @@ describe('Subscription Service - Checkout URL & Free Activation', () => {
         }),
       }),
     );
+  });
+
+  it('returns only the requesting user\'s plan for a checkout session', async () => {
+    db.payment.findFirst.mockResolvedValueOnce({
+      status: 'COMPLETED',
+      subscribe: {
+        id: 'plan_silver',
+        title: 'Silver',
+        subTitle: 'Save 5%',
+        price: 49,
+        discount: 5,
+        currency: 'USD',
+      },
+    });
+
+    await expect(
+      service.getCheckoutSessionPlan(userId, 'cs_test_123'),
+    ).resolves.toEqual({
+      status: 'COMPLETED',
+      plan: expect.objectContaining({ title: 'Silver' }),
+    });
+
+    expect(db.payment.findFirst).toHaveBeenCalledWith({
+      where: {
+        userId,
+        stripeSessionId: 'cs_test_123',
+        paymentType: 'SUBSCRIPTION',
+      },
+      select: expect.any(Object),
+    });
   });
 
   describe('recentSubscribeTionUser', () => {

@@ -21,6 +21,7 @@ import { UserModule } from './app/module/user/user.module';
 import { WalletModule } from './app/module/wallet/wallet.module';
 import { WebhookModule } from './app/module/webhook/webhook.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { DashboardModule } from './app/module/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AddAdminModule,
     PromoCodeModule,
     NotificationModule,
+    DashboardModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

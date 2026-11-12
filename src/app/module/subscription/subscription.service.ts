@@ -309,6 +309,38 @@ export class SubscriptionService {
     };
   }
 
+  async getCheckoutSessionPlan(userId: string, stripeSessionId: string) {
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        userId,
+        stripeSessionId,
+        paymentType: 'SUBSCRIPTION',
+      },
+      select: {
+        status: true,
+        subscribe: {
+          select: {
+            id: true,
+            title: true,
+            subTitle: true,
+            price: true,
+            discount: true,
+            currency: true,
+          },
+        },
+      },
+    });
+
+    if (!payment?.subscribe) {
+      throw new NotFoundException('Subscription checkout session not found');
+    }
+
+    return {
+      status: payment.status,
+      plan: payment.subscribe,
+    };
+  }
+
   async recentSubscribeTionUser(params: IFilterParams, options: IOptions = {}) {
     const { limit, page, skip, sortBy, sortOrder } = paginationHelper(options);
 

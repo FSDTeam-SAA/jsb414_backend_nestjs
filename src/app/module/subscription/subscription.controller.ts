@@ -164,6 +164,27 @@ export class SubscriptionController {
     };
   }
 
+  @Get('checkout-session/:sessionId')
+  @UseGuards(AuthGuard())
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Get the current user\'s subscription plan for a Stripe Checkout session',
+  })
+  @HttpCode(HttpStatus.OK)
+  async getCheckoutSessionPlan(
+    @Req() req: Request,
+    @Param('sessionId') sessionId: string,
+  ) {
+    const result = await this.subscriptionService.getCheckoutSessionPlan(
+      req.user!.id,
+      sessionId,
+    );
+    return {
+      message: 'Subscription checkout session fetched successfully',
+      data: result,
+    };
+  }
+
     // =========================================================================
   // কাস্টমার প্রোফাইল / মেম্বারশিপ স্ক্রিনের এন্ডপয়েন্টস (Figma User Profile Membership)
   // =========================================================================

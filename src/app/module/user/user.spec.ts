@@ -1,16 +1,23 @@
-import { ExecutionContext, ForbiddenException, HttpException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  ForbiddenException,
+  HttpException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import bcrypt from 'bcryptjs';
-import { PermissionsGuard } from '../../middlewares/permissions.guard';
 import { PrismaService } from '../../../prisma/prisma.service';
 import sendMailer from '../../helper/sendMailer';
+import { PermissionsGuard } from '../../middlewares/permissions.guard';
 import { AdminPermission } from './dto/create-admin.dto';
 import { UserService } from './user.service';
 
 jest.mock('../../helper/sendMailer', () => jest.fn().mockResolvedValue(true));
 jest.mock('bcryptjs', () => ({
   hash: jest.fn().mockResolvedValue('hashed_secret_password'),
-  compare: jest.fn().mockImplementation((raw: string) => Promise.resolve(raw === 'correct_pass')),
+  compare: jest
+    .fn()
+    .mockImplementation((raw: string) =>
+      Promise.resolve(raw === 'correct_pass'),
+    ),
 }));
 
 describe('UserService - Admin Role & Permissions', () => {
@@ -61,9 +68,21 @@ describe('UserService - Admin Role & Permissions', () => {
       badLeadRequest: {
         findMany: jest.fn(),
       },
+      deletionRequest: {
+        create: jest.fn(),
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        count: jest.fn(),
+        update: jest.fn(),
+      },
     };
 
-    service = new UserService(db as PrismaService);
+    const mockNotificationService: any = {
+      createNotification: jest.fn().mockResolvedValue(true),
+    };
+
+    service = new UserService(db as PrismaService, mockNotificationService);
   });
 
   describe('createAdminBySuperAdmin', () => {
@@ -121,7 +140,10 @@ describe('UserService - Admin Role & Permissions', () => {
     });
 
     it('updates permissions for staff admin', async () => {
-      db.user.findUnique.mockResolvedValueOnce({ id: 'admin_1', role: 'admin' });
+      db.user.findUnique.mockResolvedValueOnce({
+        id: 'admin_1',
+        role: 'admin',
+      });
 
       const result = await service.updateAdminPermissions('admin_1', {
         permissions: [AdminPermission.LEADS, AdminPermission.CUSTOMERS],
@@ -251,7 +273,9 @@ describe('UserService - Admin Role & Permissions', () => {
       expect(result.leadsActivity.totalPurchasedLeads).toBe(1);
       expect(result.leadsActivity.savedSearchesCount).toBe(3);
       expect(result.leadsActivity.badLeadRequests.length).toBe(1);
-      expect(result.leadsActivity.badLeadRequests[0].reason).toBe('INVALID_PHONE');
+      expect(result.leadsActivity.badLeadRequests[0].reason).toBe(
+        'INVALID_PHONE',
+      );
     });
   });
 
@@ -406,6 +430,204 @@ describe('UserService - Admin Role & Permissions', () => {
       );
     });
   });
+
+  describe('Deletion Requests (Figma Screen)', () => {
+    describe('submitDeletionRequest', () => {
+      it('successfully submits a deletion request with reason', async () => {
+        db.user.findUnique.mockResolvedValueOnce({ id: 'u_client_1' });
+        db.deletionRequest.findFirst.mockResolvedValueOnce(null);
+        db.deletionRequest.create.mockResolvedValueOnce({
+          id: 'del_1',
+          userId: 'u_client_1',
+          reason: "I can't continue this platform.",
+          status: 'PENDING',
+        });
+
+        const result = await service.submitDeletionRequest('u_client_1', {
+          reason: "I can't continue this platform.",
+        });
+
+        expect(result.message).toContain('submitted successfully');
+        expect(db.deletionRequest.create).toHaveBeenCalledWith({
+          data: {
+            userId: 'u_client_1',
+            reason: "I can't continue this platform.",
+            status: 'PENDING',
+          },
+        });
+      });
+
+      it('rejects if customer already has a pending deletion request', async () => {
+        db.user.findUnique.mockResolvedValueOnce({ id: 'u_client_1' });
+        db.deletionRequest.findFirst.mockResolvedValueOnce({
+          id: 'del_existing',
+          status: 'PENDING',
+        });
+
+        await expect(
+          service.submitDeletionRequest('u_client_1', {
+            reason: 'Duplicate request',
+          }),
+        ).rejects.toThrow(
+          'You already have an account deletion request pending review',
+        );
+      });
+    });
+
+    describe('getAllDeletionRequestsAdmin', () => {
+      it('returns formatted table data matching Figma Deletion Requests columns', async () => {
+        db.deletionRequest.findMany.mockResolvedValueOnce([
+          {
+            id: 'del_req_1',
+            userId: 'u_100',
+            reason: "I can't continue this platform.",
+            status: 'PENDING',
+            adminNotes: null,
+            createdAt: new Date('2026-10-23T10:00:00Z'),
+            user: {
+              id: 'u_100',
+              firstName: 'John',
+              lastName: 'Bhawal',
+              email: 'johnbhawal@gmail.com',
+              phoneNumber: '+345 345 2353',
+              photo: null,
+              createdAt: new Date('2026-10-23T08:00:00Z'),
+              updatedAt: new Date(),
+              userSubscribes: [{ subscribe: { title: 'Gold' } }],
+            },
+          },
+        ]);
+        db.deletionRequest.count.mockResolvedValueOnce(1);
+
+        const result = await service.getAllDeletionRequestsAdmin({
+          page: 1,
+          limit: 25,
+        });
+
+        expect(result.data.length).toBe(1);
+        const item = result.data[0];
+        expect(item.customerName).toBe('John Bhawal');
+        expect(item.customerId).toContain('FG-C-');
+        expect(item.email).toBe('johnbhawal@gmail.com');
+        expect(item.membership).toBe('Gold');
+        expect(item.status).toBe('PENDING');
+        expect(item.reason).toBe("I can't continue this platform.");
+        expect(result.meta.total).toBe(1);
+      });
+    });
+
+    describe('getSingleDeletionRequestAdmin', () => {
+      it('returns single deletion request details for modal', async () => {
+        db.deletionRequest.findUnique.mockResolvedValueOnce({
+          id: 'del_req_1',
+          userId: 'u_100',
+          reason: "I can't continue this platform.",
+          status: 'PENDING',
+          adminNotes: null,
+          createdAt: new Date('2026-10-23T10:00:00Z'),
+          reviewedAt: null,
+          reviewedById: null,
+          user: {
+            id: 'u_100',
+            firstName: 'John',
+            lastName: 'Bhawal',
+            email: 'johnbhawal@gmail.com',
+            phoneNumber: '+345 345 2353',
+            photo: null,
+            role: 'user',
+            createdAt: new Date('2026-10-23T08:00:00Z'),
+            updatedAt: new Date(),
+            userSubscribes: [{ subscribe: { title: 'Gold' } }],
+          },
+        });
+
+        const result = await service.getSingleDeletionRequestAdmin('del_req_1');
+
+        expect(result.id).toBe('del_req_1');
+        expect(result.customer.name).toBe('John Bhawal');
+        expect(result.customer.initials).toBe('JB');
+        expect(result.customer.membership).toBe('Gold');
+        expect(result.customer.phoneNumber).toBe('+345 345 2353');
+        expect(result.reason).toBe("I can't continue this platform.");
+      });
+    });
+
+    describe('reviewDeletionRequest', () => {
+      it('approves deletion request and triggers account anonymization/deletion', async () => {
+        db.deletionRequest.findUnique.mockResolvedValueOnce({
+          id: 'del_req_1',
+          userId: 'u_100',
+          status: 'PENDING',
+        });
+        db.userSubscribe.findFirst.mockResolvedValueOnce(null);
+        db.cartItem.deleteMany.mockResolvedValueOnce({ count: 0 });
+        db.savedSearch.deleteMany.mockResolvedValueOnce({ count: 0 });
+        db.order.count.mockResolvedValueOnce(0);
+        db.payment.count.mockResolvedValueOnce(0);
+        db.user.delete.mockResolvedValueOnce({ id: 'u_100' });
+        db.deletionRequest.update.mockResolvedValueOnce({
+          id: 'del_req_1',
+          status: 'APPROVED',
+          adminNotes: 'Confirmed by admin',
+        });
+
+        const result = await service.reviewDeletionRequest(
+          'del_req_1',
+          'admin_1',
+          {
+            status: 'APPROVED',
+            adminNotes: 'Confirmed by admin',
+          },
+        );
+
+        expect(result.message).toContain('approved');
+        expect(db.deletionRequest.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'del_req_1' },
+            data: expect.objectContaining({
+              status: 'APPROVED',
+              adminNotes: 'Confirmed by admin',
+              reviewedById: 'admin_1',
+            }),
+          }),
+        );
+      });
+
+      it('denies deletion request and updates status to DENIED', async () => {
+        db.deletionRequest.findUnique.mockResolvedValueOnce({
+          id: 'del_req_2',
+          userId: 'u_200',
+          status: 'PENDING',
+        });
+        db.deletionRequest.update.mockResolvedValueOnce({
+          id: 'del_req_2',
+          status: 'DENIED',
+          adminNotes: 'Active contracts pending',
+        });
+
+        const result = await service.reviewDeletionRequest(
+          'del_req_2',
+          'admin_1',
+          {
+            status: 'DENIED',
+            adminNotes: 'Active contracts pending',
+          },
+        );
+
+        expect(result.message).toContain('denied');
+        expect(db.deletionRequest.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: 'del_req_2' },
+            data: expect.objectContaining({
+              status: 'DENIED',
+              adminNotes: 'Active contracts pending',
+              reviewedById: 'admin_1',
+            }),
+          }),
+        );
+      });
+    });
+  });
 });
 
 describe('PermissionsGuard', () => {
@@ -428,7 +650,9 @@ describe('PermissionsGuard', () => {
   };
 
   it('allows Super Admin full access regardless of required permissions', () => {
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['LEADS', 'PRICING']);
+    jest
+      .spyOn(reflector, 'getAllAndOverride')
+      .mockReturnValue(['LEADS', 'PRICING']);
     const context = createMockContext({ role: 'superadmin', permissions: [] });
 
     expect(guard.canActivate(context)).toBe(true);

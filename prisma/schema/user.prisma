@@ -38,6 +38,7 @@ model User {
     badLeadRequests    BadLeadRequest[]
     promoUsages        PromoCodeUsage[]
     notifications      Notification[]
+    deletionRequests   DeletionRequest[]
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt

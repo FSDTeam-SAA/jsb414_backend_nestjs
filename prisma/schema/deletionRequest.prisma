@@ -1,0 +1,16 @@
+model DeletionRequest {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  reason       String    // কাস্টমারের অ্যাকাউন্ট ডিলিট করার কারণ (Figma: Reason box)
+  status       String    @default("PENDING") // PENDING, APPROVED, DENIED
+  adminNotes   String?   // অ্যাডমিনের মন্তব্য / কারণ
+  reviewedAt   DateTime?
+  reviewedById String?   // কোন অ্যাডমিন রিভিউ করেছেন
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("deletion_requests")
+}

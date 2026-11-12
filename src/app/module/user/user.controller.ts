@@ -32,7 +32,10 @@ import {
   RequirePermissions,
 } from '../../middlewares/permissions.guard';
 import { CreateAdminDto, UpdateAdminPermissionsDto } from './dto/create-admin.dto';
+import { CreateDeletionRequestDto } from './dto/create-deletion-request.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
+import { DeletionRequestQueryDto } from './dto/deletion-request-query.dto';
+import { ReviewDeletionRequestDto } from './dto/review-deletion-request.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateInterestsDto } from './dto/update-interests.dto';
 import { UserService } from './user.service';
@@ -180,6 +183,41 @@ export class UserController {
     return result;
   }
 
+  
+  @Post('deletion-request')
+  @UseGuards(AuthGuard())
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Submit account deletion request with reason (Customer)',
+    description: 'Submits a deletion request for admin review (Figma: Reason box submission).',
+  })
+  @HttpCode(HttpStatus.CREATED)
+  async submitDeletionRequest(
+    @Req() req: Request,
+    @Body() dto: CreateDeletionRequestDto,
+  ) {
+    const userId = req.user!.id;
+    const result = await this.userService.submitDeletionRequest(userId, dto);
+    return result;
+  }
+
+  @Get('deletion-request')
+  @UseGuards(AuthGuard())
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Get current user deletion request status (Customer)',
+    description: 'Checks if current user has an active/pending deletion request under review.',
+  })
+  @HttpCode(HttpStatus.OK)
+  async getMyDeletionRequest(@Req() req: Request) {
+    const userId = req.user!.id;
+    const result = await this.userService.getMyDeletionRequest(userId);
+    return {
+      message: 'Deletion request status fetched successfully',
+      data: result,
+    };
+  }
+
   // =========================================================================
   // সাব-অ্যাডমিন রোল ও পারমিশন ম্যানেজমেন্ট (শুধুমাত্র Super Admin)
   // =========================================================================
@@ -243,6 +281,72 @@ export class UserController {
   @HttpCode(HttpStatus.OK)
   async deleteAdmin(@Param('id', ParseUUIDPipe) id: string) {
     return this.userService.deleteAdmin(id);
+  }
+
+  
+  // =========================================================================
+  // একাউন্ট ডিলিটেশন রিকোয়েস্ট ম্যানেজমেন্ট (Figma: Deletion Requests)
+  // =========================================================================
+
+  @Get('admin/deletion-requests')
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('CUSTOMERS')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Get all account deletion requests for admin table (Figma Screen)',
+    description:
+      'Fetches paginated list of deletion requests with customer name, customerId, email, membership, date, and status.',
+  })
+  @HttpCode(HttpStatus.OK)
+  async getAllDeletionRequestsAdmin(@Query() query: DeletionRequestQueryDto) {
+    const result = await this.userService.getAllDeletionRequestsAdmin(query);
+    return {
+      message: 'Deletion requests fetched successfully',
+      meta: result.meta,
+      data: result.data,
+    };
+  }
+
+  @Get('admin/deletion-requests/:id')
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('CUSTOMERS')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Get single deletion request details for modal (Figma Screen Modal)',
+    description:
+      'Fetches customer profile, avatar initials, membership, phone, email, join date, last login, and submitted reason.',
+  })
+  @HttpCode(HttpStatus.OK)
+  async getSingleDeletionRequestAdmin(@Param('id', ParseUUIDPipe) id: string) {
+    const result = await this.userService.getSingleDeletionRequestAdmin(id);
+    return {
+      message: 'Deletion request details fetched successfully',
+      data: result,
+    };
+  }
+
+  @Patch('admin/deletion-requests/:id/review')
+  @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)
+  @RequirePermissions('CUSTOMERS')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Review deletion request - Approve or Deny (Figma Buttons)',
+    description:
+      'Admin approves (processes account deactivation/deletion) or denies (notifies user with reason) the deletion request.',
+  })
+  @HttpCode(HttpStatus.OK)
+  async reviewDeletionRequest(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReviewDeletionRequestDto,
+  ) {
+    const reviewerId = req.user!.id;
+    const result = await this.userService.reviewDeletionRequest(
+      id,
+      reviewerId,
+      dto,
+    );
+    return result;
   }
 
   // =========================================================================

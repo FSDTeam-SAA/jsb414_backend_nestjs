@@ -873,7 +873,7 @@ export class ReportsService {
                 firstName: true,
                 lastName: true,
                 email: true,
-                avatar: true,
+                photo: true,
               },
             },
           },
@@ -900,7 +900,7 @@ export class ReportsService {
                   firstName: true,
                   lastName: true,
                   email: true,
-                  avatar: true,
+                  photo: true,
                 },
               },
             },
@@ -979,7 +979,8 @@ export class ReportsService {
       customer: {
         name: customerName,
         email: user?.email || 'john@example.com',
-        avatar: user?.avatar || null,
+        avatar: user?.photo || null,
+        photo: user?.photo || null,
         initial: (customerName[0] || 'T').toUpperCase(),
         paymentStatus:
           orderItem?.order?.status === 'COMPLETED'

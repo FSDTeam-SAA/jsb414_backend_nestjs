@@ -1,17 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import buildWhereConditions from 'src/app/helper/buildWhereConditions';
 import paginationHelper, { IOptions } from 'src/app/helper/pagenation';
 import { IFilterParams } from 'src/app/helper/pick';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from '../../../../prisma/generated/prisma/browser';
 import { MarketplaceService } from '../marketplace/marketplace.service';
+import { NotificationService } from '../notification/notification.service';
 import { CreateSavedSearcDto } from './dto/create-saved-searc.dto';
 
 @Injectable()
 export class SavedSearcService {
+  private readonly logger = new Logger(SavedSearcService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly marketplaceService: MarketplaceService,
+    @Optional() private readonly notificationService?: NotificationService,
   ) {}
 
   async createSavedSearch(userId: string, dto: CreateSavedSearcDto) {
@@ -114,5 +119,93 @@ export class SavedSearcService {
     return await this.prisma.savedSearch.delete({
       where: { id: savedSearchId },
     });
+  }
+
+  // ৫. সেভড সার্চ অনুযায়ী সাম্প্রতিক (গত ২৪ ঘণ্টায়) নতুন লিড খোঁজা
+  async getNewMatchingLeads(userId: string, savedSearchId: string) {
+    const savedSearch = await this.prisma.savedSearch.findFirst({
+      where: { id: savedSearchId, userId },
+    });
+
+    if (!savedSearch) {
+      throw new NotFoundException('Saved search not found');
+    }
+
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const filters = (savedSearch.filters || {}) as IFilterParams;
+
+    const result = await this.marketplaceService.getAllMarketPlace(
+      { ...filters, createdFrom: since },
+      { page: 1, limit: 10, sortBy: 'createdAt', sortOrder: 'desc' },
+      userId,
+    );
+
+    return {
+      savedSearchId,
+      title: savedSearch.title,
+      since,
+      newLeadsCount: result.meta.total,
+      newLeads: result.data,
+    };
+  }
+
+  // ৬. ডেইলি ডাইজেস্ট ক্রন জব ও ম্যানুয়াল ট্রিগার
+  @Cron('0 8 * * *') // প্রতিদিন সকাল ৮:০০ টায় স্বয়ংক্রিয়ভাবে চলবে
+  async triggerDailyDigest() {
+    this.logger.log('⏰ Running daily saved-searches matching digest...');
+    const allSearches = await this.prisma.savedSearch.findMany({
+      include: {
+        user: { select: { id: true, email: true, firstName: true } },
+      },
+    });
+
+    if (allSearches.length === 0) {
+      return {
+        message: 'No saved searches registered.',
+        searchesChecked: 0,
+        notificationsSent: 0,
+      };
+    }
+
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    let notificationsSent = 0;
+
+    for (const search of allSearches) {
+      try {
+        const filters = (search.filters || {}) as IFilterParams;
+        const match = await this.marketplaceService.getAllMarketPlace(
+          { ...filters, createdFrom: since },
+          { page: 1, limit: 1 },
+          search.userId,
+        );
+
+        const count = match.meta?.total || 0;
+        if (count > 0 && this.notificationService) {
+          await this.notificationService.createNotification({
+            userId: search.userId,
+            title: 'New Matching Leads Alert',
+            message: `Found ${count} new lead(s) matching your saved search "${search.title}". Check them out on the marketplace!`,
+            type: 'SAVED_SEARCH_ALERT',
+            link: `/marketplace?savedSearchId=${search.id}`,
+          });
+          notificationsSent++;
+        }
+      } catch (err: any) {
+        this.logger.error(
+          `Failed to process saved search ${search.id}:`,
+          err?.message || err,
+        );
+      }
+    }
+
+    this.logger.log(
+      `✅ Daily digest completed: Checked ${allSearches.length} search(es), sent ${notificationsSent} alert(s).`,
+    );
+
+    return {
+      message: 'Daily saved searches digest executed successfully',
+      searchesChecked: allSearches.length,
+      notificationsSent,
+    };
   }
 }

@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
+import Stripe from 'stripe';
 import config from '../../config';
 import buildWhereConditions from '../../helper/buildWhereConditions';
 import { fileUpload } from '../../helper/fileUploder';
@@ -9,6 +10,7 @@ import { publicUserSelect } from '../../helper/public-user-select';
 import sendMailer from '../../helper/sendMailer';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { CreateAdminDto, UpdateAdminPermissionsDto } from './dto/create-admin.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateInterestsDto } from './dto/update-interests.dto';
 
@@ -642,6 +644,100 @@ export class UserService {
         status: o.status,
         createdAt: o.createdAt,
       })),
+    };
+  }
+
+  // কাস্টমার সেলফ-সার্ভিস অ্যাকাউন্ট ডিলিট বা ডিঅ্যাক্টিভেশন
+  async deleteUserAccount(userId: string, dto: DeleteAccountDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    }
+
+    // ১. পাসওয়ার্ড ভেরিফাই করা
+    const isPasswordValid = await bcrypt.compare(dto.password, user.password);
+    if (!isPasswordValid) {
+      throw new HttpException(
+        'Incorrect password. Account deletion aborted.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // ২. কোনো অ্যাক্টিভ স্ট্রাইপ সাবস্ক্রিপশন থাকলে তা ক্যানসেল করা
+    const activeSub = await this.prisma.userSubscribe.findFirst({
+      where: {
+        userId,
+        status: 'ACTIVE',
+      },
+    });
+
+    if (activeSub) {
+      if (activeSub.stripeSubscriptionId && config.stripe.secretKey) {
+        try {
+          const stripe = new Stripe(config.stripe.secretKey);
+          await stripe.subscriptions.cancel(activeSub.stripeSubscriptionId);
+        } catch (e: any) {
+          console.error(
+            'Failed to cancel stripe subscription during account deletion:',
+            e?.message || e,
+          );
+        }
+      }
+      await this.prisma.userSubscribe.update({
+        where: { id: activeSub.id },
+        data: { status: 'CANCELLED', cancelledAt: new Date() },
+      });
+    }
+
+    // ৩. কার্ট ও সেভড সার্চ ক্লিন করা
+    await Promise.all([
+      this.prisma.cartItem.deleteMany({ where: { userId } }),
+      this.prisma.savedSearch.deleteMany({ where: { userId } }),
+    ]);
+
+    // ৪. ইউজারের কোনো ফিন্যান্সিয়াল অর্ডার বা পেমেন্ট হিস্ট্রি আছে কি না
+    const [orderCount, paymentCount] = await Promise.all([
+      this.prisma.order.count({ where: { userId } }),
+      this.prisma.payment.count({ where: { userId } }),
+    ]);
+
+    if (orderCount === 0 && paymentCount === 0) {
+      // ফিন্যান্সিয়াল হিস্ট্রি নেই - সম্পূর্ণ ডিলিট করা
+      await this.prisma.user.delete({ where: { id: userId } });
+      return {
+        message: 'Your account and personal data have been permanently deleted.',
+        deleted: true,
+      };
+    }
+
+    // ফিন্যান্সিয়াল ও অডিট রেকর্ড অটুট রাখতে ব্যক্তিগত তথ্য অ্যানোনিমাইজ করা
+    const anonymizedEmail = `deleted_${userId.substring(0, 8)}_${Date.now()}@anonymized.user`;
+    const dummyPassword = await bcrypt.hash(Math.random().toString(36), 10);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        firstName: 'Deactivated',
+        lastName: 'Account',
+        email: anonymizedEmail,
+        phoneNumber: null,
+        photo: null,
+        password: dummyPassword,
+        verifiedEmail: false,
+        walletBalance: 0,
+        leadTypes: [],
+        interestedStates: [],
+        interestedCities: [],
+      },
+    });
+
+    return {
+      message:
+        'Your account has been deactivated and your personal details have been safely anonymized in compliance with data privacy regulations.',
+      deactivated: true,
     };
   }
 }

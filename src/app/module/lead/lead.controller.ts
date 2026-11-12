@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Req,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -21,7 +22,7 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { fileUpload } from 'src/app/helper/fileUploder';
 import pick from 'src/app/helper/pick';
 import { AuthGuard } from 'src/app/middlewares/auth.guard';
@@ -144,6 +145,35 @@ export class LeadController {
       message: 'Lead overview',
       data: result,
     };
+  }
+
+  @Get('export')
+  @ApiOperation({
+    summary: 'Export filtered leads to clean CSV file (Admin)',
+    description:
+      'Exports leads matching current filter criteria to a clean downloadable CSV file.',
+  })
+  @ApiQuery({ name: 'searchTerm', required: false, type: 'string' })
+  @ApiQuery({ name: 'categoryId', required: false, type: 'string' })
+  @ApiQuery({ name: 'city', required: false, type: 'string' })
+  @ApiQuery({ name: 'state', required: false, type: 'string' })
+  @ApiQuery({ name: 'status', required: false, type: 'string' })
+  @ApiQuery({ name: 'availability', required: false, type: 'string' })
+  @ApiQuery({ name: 'classification', required: false, type: 'string' })
+  @ApiBearerAuth('access-token')
+  async exportLeads(@Req() req: Request, @Res() res: Response) {
+    const filters = pick(req.query, [
+      'searchTerm',
+      'categoryId',
+      'city',
+      'state',
+      'status',
+      'availability',
+      'source',
+      'propertyType',
+      'classification',
+    ]);
+    return this.leadService.exportLeadsCsv(filters, res);
   }
 
   @Get(':id')

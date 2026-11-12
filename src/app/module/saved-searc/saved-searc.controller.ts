@@ -61,6 +61,35 @@ export class SavedSearcController {
     };
   }
 
+  @Post('trigger-digest')
+  @ApiOperation({
+    summary: 'Manually trigger daily saved-searches matching digest (Admin/Dev)',
+    description:
+      'Checks all saved searches against leads added in last 24h and sends notification alerts.',
+  })
+  @HttpCode(HttpStatus.OK)
+  async triggerDigest() {
+    const result = await this.savedSearcService.triggerDailyDigest();
+    return {
+      message: result.message,
+      data: result,
+    };
+  }
+
+  @Get(':id/new-leads')
+  @ApiOperation({
+    summary: 'Get new leads matching this saved search added in the last 24 hours',
+  })
+  @HttpCode(HttpStatus.OK)
+  async getNewLeads(@Req() req: Request, @Param('id') id: string) {
+    const userId = req.user!.id;
+    const result = await this.savedSearcService.getNewMatchingLeads(userId, id);
+    return {
+      message: 'New matching leads fetched successfully',
+      data: result,
+    };
+  }
+
   @Get(':id/results')
   @ApiOperation({ summary: 'Get live marketplace results for a saved search' })
   @HttpCode(HttpStatus.OK)

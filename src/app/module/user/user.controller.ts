@@ -32,6 +32,7 @@ import {
   RequirePermissions,
 } from '../../middlewares/permissions.guard';
 import { CreateAdminDto, UpdateAdminPermissionsDto } from './dto/create-admin.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateInterestsDto } from './dto/update-interests.dto';
 import { UserService } from './user.service';
@@ -162,6 +163,21 @@ export class UserController {
       message: 'Interests saved successfully',
       data: result,
     };
+  }
+
+    @Delete('account')
+  @UseGuards(AuthGuard())
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Delete or deactivate current user account with password confirmation',
+    description:
+      'Verifies password, cancels active subscription, deletes cart/saved searches, and deletes or anonymizes account history.',
+  })
+  @HttpCode(HttpStatus.OK)
+  async deleteAccount(@Req() req: Request, @Body() dto: DeleteAccountDto) {
+    const userId = req.user!.id;
+    const result = await this.userService.deleteUserAccount(userId, dto);
+    return result;
   }
 
   // =========================================================================

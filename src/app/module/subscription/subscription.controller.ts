@@ -236,6 +236,23 @@ export class SubscriptionController {
     };
   }
 
+  @Post('check-expired')
+  @ApiBearerAuth('access-token')
+  @UseGuards(AuthGuard('admin', 'superadmin'))
+  @ApiOperation({
+    summary: 'Manually trigger overdue subscriptions expiration check (Admin/Dev)',
+    description:
+      'Checks all active/cancelled memberships where endDate has passed, marks them EXPIRED, and sends in-app notifications.',
+  })
+  @HttpCode(HttpStatus.OK)
+  async triggerCheckExpired() {
+    const result = await this.subscriptionService.expireOverdueSubscriptions();
+    return {
+      message: result.message,
+      data: result,
+    };
+  }
+
   @Get('overview')
   @ApiBearerAuth('access-token')
   @UseGuards(AuthGuard('admin', 'superadmin'), PermissionsGuard)

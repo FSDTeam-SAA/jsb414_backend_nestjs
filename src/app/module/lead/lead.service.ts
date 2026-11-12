@@ -1,8 +1,10 @@
 import {
   BadRequestException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import buildWhereConditions from 'src/app/helper/buildWhereConditions';
 import { fileUpload } from 'src/app/helper/fileUploder';
 import paginationHelper, { IOptions } from 'src/app/helper/pagenation';
@@ -158,6 +160,99 @@ export class LeadService {
       },
       data: data.map((lead) => this.withCategoryPrices(lead)),
     };
+  }
+
+  // ২.১ সকল ফিল্টার্ড লিড CSV আকারে এক্সপোর্ট করা (অ্যাডমিনের জন্য)
+  async exportLeadsCsv(params: IFilterParams, res: Response) {
+    const searchableFields = [
+      'firstName',
+      'lastName',
+      'propertyAddress',
+      'city',
+      'state',
+      'county',
+      'zipcode',
+      'stage',
+      'source',
+      'propertyType',
+    ];
+
+    const whereConditions = buildWhereConditions(params, searchableFields);
+
+    const leads = await this.prisma.lead.findMany({
+      where: whereConditions,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        category: true,
+      },
+    });
+
+    const headers = [
+      'Lead Number',
+      'Category',
+      'First Name',
+      'Last Name',
+      'Property Address',
+      'Unit Number',
+      'City',
+      'County',
+      'State',
+      'Zipcode',
+      'Property Type',
+      'Estimated Value',
+      'Estimated Equity',
+      'Mortgage Balance',
+      'Phone Numbers',
+      'Email Addresses',
+      'Availability',
+      'Status',
+      'Classification',
+      'Created At',
+    ];
+
+    const escapeCsv = (val: any) => {
+      if (val === null || val === undefined) return '';
+      const str = Array.isArray(val) ? val.join('; ') : String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = leads.map((l) => [
+      l.leadNumber || '',
+      l.category?.name || '',
+      l.firstName || '',
+      l.lastName || '',
+      l.propertyAddress || '',
+      l.unitNumber || '',
+      l.city || '',
+      l.county || '',
+      l.state || '',
+      l.zipcode || '',
+      l.propertyType || '',
+      l.estValue ? Number(l.estValue) : '',
+      l.estEquity ? Number(l.estEquity) : '',
+      l.mortgageBalance ? Number(l.mortgageBalance) : '',
+      l.phoneNumbers || [],
+      l.emailAddresses || [],
+      l.availability || '',
+      l.status || '',
+      l.classification || '',
+      l.createdAt ? new Date(l.createdAt).toISOString() : '',
+    ]);
+
+    const csvContent = [
+      headers.map(escapeCsv).join(','),
+      ...rows.map((row) => row.map(escapeCsv).join(',')),
+    ].join('\r\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="leads_export_${Date.now()}.csv"`,
+    );
+    return res.status(HttpStatus.OK).send(csvContent);
   }
 
   // 3. সিঙ্গেল লিড বিস্তারিত

@@ -749,4 +749,58 @@ export class SubscriptionService {
       };
     });
   }
+
+  // ৫. মেয়াদোত্তীর্ণ মেম্বারশিপ স্বয়ংক্রিয়ভাবে এক্সপায়ার করা ও নোটিফিকেশন পাঠানো
+  async expireOverdueSubscriptions() {
+    const now = new Date();
+    const overdue = await this.prisma.userSubscribe.findMany({
+      where: {
+        endDate: { lt: now },
+        status: { in: ['ACTIVE', 'CANCELLED'] },
+      },
+      include: {
+        subscribe: { select: { title: true } },
+        user: { select: { id: true, firstName: true, email: true } },
+      },
+    });
+
+    if (overdue.length === 0) {
+      return {
+        message: 'No overdue subscriptions found. All active plans are valid.',
+        expiredCount: 0,
+        expiredIds: [],
+      };
+    }
+
+    await this.prisma.userSubscribe.updateMany({
+      where: {
+        id: { in: overdue.map((s) => s.id) },
+      },
+      data: {
+        status: 'EXPIRED',
+      },
+    });
+
+    for (const sub of overdue) {
+      try {
+        if (this.notificationService) {
+          await this.notificationService.createNotification({
+            userId: sub.user.id,
+            title: 'Membership Expired',
+            message: `Your ${sub.subscribe?.title || 'paid'} membership has expired. Your account has switched to the Free plan.`,
+            type: 'SYSTEM',
+            link: '/dashboard/membership',
+          });
+        }
+      } catch (err: any) {
+        console.error('Failed to send expiry notification:', err?.message || err);
+      }
+    }
+
+    return {
+      message: `Successfully expired ${overdue.length} overdue subscription(s) and notified users.`,
+      expiredCount: overdue.length,
+      expiredIds: overdue.map((s) => s.id),
+    };
+  }
 }

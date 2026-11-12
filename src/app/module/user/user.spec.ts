@@ -10,6 +10,7 @@ import { UserService } from './user.service';
 jest.mock('../../helper/sendMailer', () => jest.fn().mockResolvedValue(true));
 jest.mock('bcryptjs', () => ({
   hash: jest.fn().mockResolvedValue('hashed_secret_password'),
+  compare: jest.fn().mockImplementation((raw: string) => Promise.resolve(raw === 'correct_pass')),
 }));
 
 describe('UserService - Admin Role & Permissions', () => {
@@ -36,6 +37,13 @@ describe('UserService - Admin Role & Permissions', () => {
       },
       userSubscribe: {
         findFirst: jest.fn(),
+        update: jest.fn(),
+      },
+      cartItem: {
+        deleteMany: jest.fn(),
+      },
+      payment: {
+        count: jest.fn(),
       },
       userLead: {
         findMany: jest.fn(),
@@ -44,9 +52,11 @@ describe('UserService - Admin Role & Permissions', () => {
       order: {
         aggregate: jest.fn(),
         findMany: jest.fn(),
+        count: jest.fn(),
       },
       savedSearch: {
         count: jest.fn(),
+        deleteMany: jest.fn(),
       },
       badLeadRequest: {
         findMany: jest.fn(),
@@ -330,6 +340,69 @@ describe('UserService - Admin Role & Permissions', () => {
 
       await expect(service.getSingleUser('u_missing')).rejects.toThrow(
         HttpException,
+      );
+    });
+  });
+
+  describe('deleteUserAccount', () => {
+    it('throws HttpException if password does not match', async () => {
+      db.user.findUnique.mockResolvedValueOnce({
+        id: 'u_1',
+        password: 'hashed_password',
+      });
+
+      await expect(
+        service.deleteUserAccount('u_1', { password: 'wrong_pass' }),
+      ).rejects.toThrow('Incorrect password');
+    });
+
+    it('permanently deletes user if there are no financial records (0 orders, 0 payments)', async () => {
+      db.user.findUnique.mockResolvedValueOnce({
+        id: 'u_clean',
+        password: 'hashed_password',
+      });
+      db.userSubscribe.findFirst.mockResolvedValueOnce(null);
+      db.cartItem.deleteMany.mockResolvedValueOnce({ count: 0 });
+      db.savedSearch.deleteMany.mockResolvedValueOnce({ count: 0 });
+      db.order.count.mockResolvedValueOnce(0);
+      db.payment.count.mockResolvedValueOnce(0);
+      db.user.delete.mockResolvedValueOnce({ id: 'u_clean' });
+
+      const result = await service.deleteUserAccount('u_clean', {
+        password: 'correct_pass',
+      });
+
+      expect(result.deleted).toBe(true);
+      expect(db.user.delete).toHaveBeenCalledWith({ where: { id: 'u_clean' } });
+    });
+
+    it('anonymizes and deactivates user if user has financial history (orders/payments)', async () => {
+      db.user.findUnique.mockResolvedValueOnce({
+        id: 'u_has_orders',
+        password: 'hashed_password',
+      });
+      db.userSubscribe.findFirst.mockResolvedValueOnce(null);
+      db.cartItem.deleteMany.mockResolvedValueOnce({ count: 0 });
+      db.savedSearch.deleteMany.mockResolvedValueOnce({ count: 0 });
+      db.order.count.mockResolvedValueOnce(2);
+      db.payment.count.mockResolvedValueOnce(2);
+      db.user.update.mockResolvedValueOnce({ id: 'u_has_orders' });
+
+      const result = await service.deleteUserAccount('u_has_orders', {
+        password: 'correct_pass',
+      });
+
+      expect(result.deactivated).toBe(true);
+      expect(db.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'u_has_orders' },
+          data: expect.objectContaining({
+            firstName: 'Deactivated',
+            lastName: 'Account',
+            walletBalance: 0,
+            verifiedEmail: false,
+          }),
+        }),
       );
     });
   });

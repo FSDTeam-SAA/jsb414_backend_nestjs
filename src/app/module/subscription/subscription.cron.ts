@@ -2,44 +2,26 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import config from 'src/app/config';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { SubscriptionService } from './subscription.service';
 
 @Injectable()
 export class SubscriptionCron {
   private readonly logger = new Logger(SubscriptionCron.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly subscriptionService: SubscriptionService) {}
 
   @Cron(config.everyDay || '0 0 * * *')
   async checkExpiredSubscriptions() {
     const now = new Date();
     this.logger.log(
-      `⏰ [Cron Triggered] Running check at: ${now.toLocaleTimeString()}`,
+      `⏰ [Cron Triggered] Running subscription expiration check at: ${now.toLocaleTimeString()}`,
     );
 
     try {
-      // মেয়াদ শেষ হওয়া মেম্বারশিপ আপডেট করা
-      const expired = await this.prisma.userSubscribe.updateMany({
-        where: {
-          endDate: { lt: now },
-          status: 'ACTIVE',
-        },
-        data: {
-          status: 'EXPIRED',
-        },
-      });
-
-      if (expired.count > 0) {
-        this.logger.warn(
-          `✅ Found & updated ${expired.count} expired subscriptions to EXPIRED.`,
-        );
-      } else {
-        this.logger.log(
-          `👍 No expired subscriptions found. All active plans are valid.`,
-        );
-      }
+      const result = await this.subscriptionService.expireOverdueSubscriptions();
+      this.logger.log(`✅ [SubscriptionCron] ${result.message}`);
     } catch (error) {
-      this.logger.error(`❌ Cron Job Error:`, error);
+      this.logger.error(`❌ Subscription Cron Job Error:`, error);
     }
   }
 }

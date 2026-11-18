@@ -78,3 +78,52 @@ export function AuthGuard(...roles: string[]): Type<CanActivate> {
   }
   return mixin(MiddlewaresGuard);
 }
+
+export function OptionalAuthGuard(): Type<CanActivate> {
+  @Injectable()
+  class OptionalMiddlewaresGuard implements CanActivate {
+    constructor(
+      readonly jwtService: JwtService,
+      readonly prisma: PrismaService,
+    ) {}
+
+    async canActivate(context: ExecutionContext): Promise<boolean> {
+      const request = context.switchToHttp().getRequest<Request>();
+      const match = /^Bearer ([^\s]+)$/i.exec(
+        request.headers.authorization || '',
+      );
+      if (!match) return true;
+
+      try {
+        const decoded = this.jwtService.verify<JwtPayload>(match[1], {
+          secret: config.jwt.accessTokenSecret,
+          algorithms: ['HS256'],
+        });
+        if (
+          decoded &&
+          decoded.purpose === 'access' &&
+          typeof decoded.id === 'string'
+        ) {
+          const user = await this.prisma.user.findUnique({
+            where: { id: decoded.id },
+          });
+          if (
+            user &&
+            decoded.passwordVersion === passwordVersion(user.password)
+          ) {
+            request.user = {
+              ...decoded,
+              email: user.email,
+              role: user.role,
+              permissions: user.permissions || [],
+            };
+          }
+        }
+      } catch {
+        // If token is invalid or expired, continue as unauthenticated guest
+      }
+      return true;
+    }
+  }
+  return mixin(OptionalMiddlewaresGuard);
+}

@@ -20,7 +20,7 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import pick from 'src/app/helper/pick';
-import { AuthGuard } from 'src/app/middlewares/auth.guard';
+import { AuthGuard, OptionalAuthGuard } from 'src/app/middlewares/auth.guard';
 import {
   PermissionsGuard,
   RequirePermissions,
@@ -28,12 +28,59 @@ import {
 import { ContactupService } from './contactup.service';
 import { AdminReplyContactupDto } from './dto/admin-reply-contactup.dto';
 import { CreateContactupDto } from './dto/create-contactup.dto';
+import { CreateSendMessageDto } from './dto/create-send-message.dto';
+import { CreateSupportRequestDto } from './dto/create-support-request.dto';
 import { UpdateContactupDto } from './dto/update-contactup.dto';
 
 @ApiTags('Contact Us')
 @Controller('contact-us')
 export class ContactupController {
   constructor(private readonly contactupService: ContactupService) {}
+
+  // ==========================================
+  // নতুন দুইটা এপিআই (NEW ADDED APIS)
+  // ==========================================
+
+  @Post('send-message')
+  @UseGuards(OptionalAuthGuard())
+  @ApiOperation({ summary: 'Submit "Send Us A Message" form (Image 1)' })
+  @HttpCode(HttpStatus.CREATED)
+  async createSendMessage(
+    @Req() req: Request,
+    @Body() dto: CreateSendMessageDto,
+  ) {
+    const userId = req.user?.id;
+    const result = await this.contactupService.createSendMessage(dto, userId);
+    return {
+      message:
+        'Message sent successfully. Our specialist will be in touch shortly.',
+      data: result,
+    };
+  }
+
+  @Post('support-request')
+  @UseGuards(OptionalAuthGuard())
+  @ApiOperation({ summary: 'Submit "Submit A Support Request" form (Image 2)' })
+  @HttpCode(HttpStatus.CREATED)
+  async createSupportRequest(
+    @Req() req: Request,
+    @Body() dto: CreateSupportRequestDto,
+  ) {
+    const userId = req.user?.id;
+    const result = await this.contactupService.createSupportRequest(
+      dto,
+      userId,
+    );
+    return {
+      message:
+        'Support request submitted successfully. Our team will respond promptly.',
+      data: result,
+    };
+  }
+
+  // ==========================================
+  // আগের এক্সিস্টিং এপিআই (ORIGINAL EXISTING APIS)
+  // ==========================================
 
   @Post()
   @ApiBearerAuth('access-token')
@@ -42,7 +89,7 @@ export class ContactupController {
   @HttpCode(HttpStatus.CREATED)
   async createContactUs(@Req() req: Request, @Body() dto: CreateContactupDto) {
     const userId = req.user!.id;
-    const result = await this.contactupService.createContactUs(userId, dto);
+    const result = await this.contactupService.createContactUs(dto, userId);
     return {
       message: 'Contact message submitted successfully',
       data: result,
@@ -62,7 +109,13 @@ export class ContactupController {
   @HttpCode(HttpStatus.OK)
   async getMyContactUs(@Req() req: Request) {
     const userId = req.user!.id;
-    const filters = pick(req.query, ['searchTerm', 'status', 'subject']);
+    const filters = pick(req.query, [
+      'searchTerm',
+      'status',
+      'subject',
+      'type',
+      'issueType',
+    ]);
     const options = pick(req.query, ['page', 'limit', 'sortBy', 'sortOrder']);
     const result = await this.contactupService.getMyContactUs(
       userId,
@@ -97,6 +150,8 @@ export class ContactupController {
       'subject',
       'email',
       'name',
+      'type',
+      'issueType',
     ]);
     const options = pick(req.query, ['page', 'limit', 'sortBy', 'sortOrder']);
     const result = await this.contactupService.getAllContactUs(

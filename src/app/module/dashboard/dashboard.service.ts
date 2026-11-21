@@ -341,6 +341,11 @@ export class DashboardService {
   async adminDashboardOverview() {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
 
     const [
       totalUsers,
@@ -355,6 +360,9 @@ export class DashboardService {
       pendingBadLeadRequests,
       recentOrders,
       recentUsers,
+      todayOrdersAgg,
+      monthOrdersAgg,
+      totalLeadsSold,
     ] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.user.count({ where: { role: 'user' } }),
@@ -403,6 +411,15 @@ export class DashboardService {
           createdAt: true,
         },
       }),
+      this.prisma.order.aggregate({
+        where: { status: 'COMPLETED', createdAt: { gte: startOfToday } },
+        _sum: { totalAmount: true },
+      }),
+      this.prisma.order.aggregate({
+        where: { status: 'COMPLETED', createdAt: { gte: startOfMonth } },
+        _sum: { totalAmount: true },
+      }),
+      this.prisma.userLead.count(),
     ]);
 
     return {
@@ -421,6 +438,9 @@ export class DashboardService {
         totalOrders,
         completedOrders: completedOrdersAgg._count.id || 0,
         totalRevenue: Number(completedOrdersAgg._sum.totalAmount || 0),
+        revenueToday: Number(todayOrdersAgg._sum.totalAmount || 0),
+        revenueThisMonth: Number(monthOrdersAgg._sum.totalAmount || 0),
+        leadsSold: totalLeadsSold || exclusiveSoldLeads,
         walletRevenue: Number(completedOrdersAgg._sum.walletUsed || 0),
         cardRevenue: Number(completedOrdersAgg._sum.cardPaid || 0),
       },

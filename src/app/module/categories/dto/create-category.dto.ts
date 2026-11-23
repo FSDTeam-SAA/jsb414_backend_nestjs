@@ -15,10 +15,10 @@ export class CreateCategoryDto {
   @IsNotEmpty()
   name!: string;
 
-  @ApiPropertyOptional({ example: '' })
+  @ApiPropertyOptional({ example: '<p>Category description</p>' })
   @IsString()
   @IsOptional()
-  description: string;
+  description?: string;
 
   @ApiPropertyOptional({
     type: 'string',

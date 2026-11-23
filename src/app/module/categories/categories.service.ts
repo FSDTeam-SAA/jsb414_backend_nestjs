@@ -83,6 +83,11 @@ export class CategoriesService {
         orderBy: {
           [sortBy]: sortOrder,
         },
+        include: {
+          _count: {
+            select: { leads: true },
+          },
+        },
       }),
       this.prisma.catagorie.count({
         where: whereConditions,
@@ -102,6 +107,11 @@ export class CategoriesService {
     const result = await this.prisma.catagorie.findUnique({
       where: {
         id: id,
+      },
+      include: {
+        _count: {
+          select: { leads: true },
+        },
       },
     });
 
@@ -124,6 +134,24 @@ export class CategoriesService {
 
     if (!existingCategory) {
       throw new HttpException('Category not found', HttpStatus.NOT_FOUND);
+    }
+
+    if (
+      updateCategorieDto.name &&
+      updateCategorieDto.name.trim() !== existingCategory.name.trim()
+    ) {
+      const duplicate = await this.prisma.catagorie.findFirst({
+        where: {
+          name: updateCategorieDto.name.trim(),
+          NOT: { id },
+        },
+      });
+      if (duplicate) {
+        throw new HttpException(
+          'Category with this name already exists',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
     }
 
     if (file) {
